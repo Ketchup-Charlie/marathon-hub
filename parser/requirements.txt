@@ -1,0 +1,5 @@
+fitparse
+pandas
+requests
+python-dotenv
+supabase
