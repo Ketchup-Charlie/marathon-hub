@@ -1,26 +1,126 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────
+   Performance Terminal — Design System Tokens
+   ───────────────────────────────────────────────────────── */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Surface scale */
+  --surface:                  #0e141a;
+  --surface-dim:              #0e141a;
+  --surface-bright:           #343a41;
+  --surface-container-lowest: #090f15;
+  --surface-container-low:    #161c23;
+  --surface-container:        #1a2027;
+  --surface-container-high:   #252b31;
+  --surface-container-highest:#2f353c;
+
+  /* Text */
+  --on-surface:               #dde3ec;
+  --on-surface-variant:       #c6c6cb;
+
+  /* Borders */
+  --outline:                  #8f9095;
+  --outline-variant:          #30363d;
+
+  /* Accent — amber (secondary) */
+  --amber:                    #FFB300;
+  --amber-container:          #feb300;
+  --on-amber:                 #432c00;
+
+  /* Accent — teal (tertiary) */
+  --teal:                     #2ddbde;
+  --teal-dim:                 #00CED1;
+  --on-teal:                  #003738;
+
+  /* Semantic aliases used throughout components */
+  --background:               var(--surface);
+  --foreground:               var(--on-surface);
+  --border:                   var(--outline-variant);
+  --muted:                    var(--surface-container-high);
+  --muted-foreground:         var(--on-surface-variant);
+
+  /* shadcn compat layer */
+  --card:                     var(--surface-container-low);
+  --card-foreground:          var(--on-surface);
+  --primary:                  var(--teal);
+  --primary-foreground:       var(--on-teal);
+  --secondary:                var(--amber);
+  --secondary-foreground:     var(--on-amber);
+  --ring:                     var(--teal);
+  --input:                    var(--outline-variant);
+  --radius:                   0px;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background:         var(--background);
+  --color-foreground:         var(--foreground);
+  --color-border:             var(--border);
+  --color-muted:              var(--muted);
+  --color-muted-foreground:   var(--muted-foreground);
+  --color-teal:               var(--teal);
+  --color-amber:              var(--amber);
+  --color-surface-container:  var(--surface-container);
+  --font-sans:                var(--font-space-grotesk);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ─── Base reset ─────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  border-color: var(--outline-variant);
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  font-size: 16px;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--surface);
+  color: var(--on-surface);
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Typography utilities ───────────────────────────────── */
+
+.label-caps {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.body-sm {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+}
+
+.metric-lg {
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.headline-md {
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+.code-data {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: 0;
 }
