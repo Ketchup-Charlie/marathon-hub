@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { race_name, race_date, target_time, pace_mp, pace_tempo, pace_interval, pace_easy } = body
+  const { race_name, race_date, target_time, pace_mp, pace_tempo, pace_interval, pace_easy, total_weeks } = body
 
   const { data, error } = await supabase
     .from('race_config')
@@ -45,11 +45,11 @@ export async function POST(req: NextRequest) {
 
   if (error) return Response.json({ error: error.message }, { status: 400 })
 
-  if (race_date) {
-    await supabase
-      .from('blocks')
-      .update({ race_date })
-      .eq('user_id', user.id)
+  const blockUpdate: Record<string, unknown> = {}
+  if (race_date)              blockUpdate.race_date   = race_date
+  if (total_weeks !== undefined) blockUpdate.total_weeks = total_weeks
+  if (Object.keys(blockUpdate).length > 0) {
+    await supabase.from('blocks').update(blockUpdate).eq('user_id', user.id)
   }
 
   return Response.json(data)

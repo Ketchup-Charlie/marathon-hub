@@ -68,38 +68,28 @@ export default function SettingsClient({
     setError(null)
     setSaved(false)
     try {
+      const body: Record<string, unknown> = {
+        race_name:     form.race_name     || null,
+        race_date:     form.race_date     || null,
+        target_time:   form.target_time,
+        pace_mp:       form.pace_mp       || null,
+        pace_tempo:    form.pace_tempo     || null,
+        pace_interval: form.pace_interval  || null,
+        pace_easy:     form.pace_easy      || null,
+      }
+      if (block !== null) body.total_weeks = form.total_weeks
+
       const rcRes = await fetch("/api/race-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          race_name:     form.race_name     || null,
-          race_date:     form.race_date     || null,
-          target_time:   form.target_time,
-          pace_mp:       form.pace_mp       || null,
-          pace_tempo:    form.pace_tempo     || null,
-          pace_interval: form.pace_interval  || null,
-          pace_easy:     form.pace_easy      || null,
-        }),
+        body: JSON.stringify(body),
       })
       if (!rcRes.ok) {
         const d = await rcRes.json()
         setError(d.error ?? "SAVE_FAILED")
         return
       }
-
-      if (block !== null && form.total_weeks !== originalWeeks.current) {
-        const blkRes = await fetch("/api/blocks", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: block.id, total_weeks: form.total_weeks }),
-        })
-        if (!blkRes.ok) {
-          const d = await blkRes.json()
-          setError(d.error ?? "BLOCK_UPDATE_FAILED")
-          return
-        }
-        originalWeeks.current = form.total_weeks
-      }
+      originalWeeks.current = form.total_weeks
 
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)

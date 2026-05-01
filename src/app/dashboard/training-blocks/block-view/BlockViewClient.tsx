@@ -11,6 +11,7 @@ type Block = {
   race_date: string
   start_date: string
   total_weeks: number
+  week_phases: Record<string, string>
 }
 
 type Workout = {
@@ -28,6 +29,7 @@ type Workout = {
 type ModalState = {
   open: boolean
   date: string
+  weekNum: number
   existing: Workout | null
 }
 
@@ -38,6 +40,7 @@ type FormState = {
   target_metric_min: string
   target_metric_max: string
   description: string
+  phase: string
 }
 
 /* ─── Constants ──────────────────────────────────────────── */
@@ -47,20 +50,23 @@ const TYPE_COLOR: Record<string, string> = {
   Tempo:    'var(--amber)',
   Interval: '#ffb300',
   Long:     '#c084fc',
+  Race:     'var(--amber)',
   Strength: 'var(--on-surface-variant)',
   Rest:     'var(--surface-container-highest)',
 }
 
-const WORKOUT_TYPES = ['Easy', 'Long', 'Tempo', 'Interval', 'Strength', 'Rest']
+const WORKOUT_TYPES = ['Easy', 'Long', 'Tempo', 'Interval', 'Race', 'Strength', 'Rest']
 const METRIC_TYPES  = ['Pace', 'HR', 'RPE']
+const PHASE_TYPES   = ['BASE', 'BUILD', 'PEAK', 'TAPER', 'RACE']
 
 const EMPTY_FORM: FormState = {
-  workout_type: 'Easy',
+  workout_type:       'Easy',
   target_distance_km: '',
   target_metric_type: 'HR',
-  target_metric_min: '',
-  target_metric_max: '',
-  description: '',
+  target_metric_min:  '',
+  target_metric_max:  '',
+  description:        '',
+  phase:              'BASE',
 }
 
 /* ─── Helpers ────────────────────────────────────────────── */
@@ -83,7 +89,7 @@ function toDateStr(date: Date): string {
 }
 
 function fmtRange(weekMon: Date): string {
-  const sun = addDays(weekMon, 6)
+  const sun    = addDays(weekMon, 6)
   const mMonth = weekMon.toLocaleDateString('en-US', { month: 'short' })
   const sMonth = sun.toLocaleDateString('en-US', { month: 'short' })
   if (mMonth === sMonth) return `${mMonth} ${weekMon.getDate()}–${sun.getDate()}`
@@ -94,16 +100,21 @@ function fmtDist(km: number): string {
   return `${km % 1 === 0 ? km : km.toFixed(1)}k`
 }
 
-// total_weeks is dynamic (block prop, range 6–24). The final week always shows RACE;
-// the penultimate week always shows TAPER. Other boundaries target a standard 12-week plan —
-// recalculate proportionally from total_weeks when a create/edit block UI is added.
-function getPhase(w: number, totalWeeks: number): string {
+// Dynamic phase formula for any plan length N.
+// Fixed suffix: RACE(N), TAPER(N-1, N-2), PEAK(N-3, N-4).
+// Remaining weeks 1..N-5 split evenly: first ⌈n/2⌉ = BASE, rest = BUILD.
+// overrides map (week key → phase) wins over calculated phase.
+function getPhase(w: number, totalWeeks: number, overrides: Record<string, string> = {}): string {
+  if (overrides[String(w)]) return overrides[String(w)]
   if (w === totalWeeks)     return 'RACE'
   if (w === totalWeeks - 1) return 'TAPER'
-  if (w <= 4)  return 'BASE'
-  if (w <= 8)  return 'BUILD'
-  if (w <= 10) return 'PEAK'
-  return 'TAPER'
+  if (w === totalWeeks - 2) return 'TAPER'
+  if (w === totalWeeks - 3) return 'PEAK'
+  if (w === totalWeeks - 4) return 'PEAK'
+  const remaining = totalWeeks - 5
+  if (remaining <= 0) return 'BASE'
+  const halfPoint = Math.ceil(remaining / 2)
+  return w <= halfPoint ? 'BASE' : 'BUILD'
 }
 
 function getCurrentWeekNum(startDate: Date, totalWeeks: number): number {
@@ -141,11 +152,12 @@ export default function BlockViewClient({
 }) {
   const startDate = useMemo(() => parseLocalDate(block.start_date), [block.start_date])
 
-  const [workouts, setWorkouts]   = useState<Workout[]>(initialWorkouts)
-  const [modal, setModal]         = useState<ModalState>({ open: false, date: '', existing: null })
-  const [form, setForm]           = useState<FormState>(EMPTY_FORM)
-  const [saving, setSaving]       = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
+  const [workouts, setWorkouts]     = useState<Workout[]>(initialWorkouts)
+  const [weekPhases, setWeekPhases] = useState<Record<string, string>>(block.week_phases)
+  const [modal, setModal]           = useState<ModalState>({ open: false, date: '', weekNum: 1, existing: null })
+  const [form, setForm]             = useState<FormState>(EMPTY_FORM)
+  const [saving, setSaving]         = useState(false)
+  const [saveError, setSaveError]   = useState<string | null>(null)
 
   const workoutsByDate = useMemo(() => {
     const map = new Map<string, Workout>()
@@ -169,19 +181,20 @@ export default function BlockViewClient({
   const weeks = useMemo(
     () =>
       Array.from({ length: block.total_weeks }, (_, i) => {
-        const w   = i + 1
-        const mon = addDays(startDate, 1 + i * 7)
+        const w    = i + 1
+        const mon  = addDays(startDate, 1 + i * 7)
         const days = Array.from({ length: 7 }, (_, d) => addDays(mon, d))
-        return { w, mon, days, phase: getPhase(w, block.total_weeks) }
+        return { w, mon, days, phase: getPhase(w, block.total_weeks, weekPhases) }
       }),
-    [startDate, block.total_weeks]
+    [startDate, block.total_weeks, weekPhases]
   )
 
   /* ── Modal handlers ────────────────────────────────────── */
 
-  function openModal(date: string) {
-    const existing = workoutsByDate.get(date) ?? null
-    setModal({ open: true, date, existing })
+  function openModal(date: string, weekNum: number) {
+    const existing     = workoutsByDate.get(date) ?? null
+    const currentPhase = weekPhases[String(weekNum)] ?? getPhase(weekNum, block.total_weeks)
+    setModal({ open: true, date, weekNum, existing })
     setForm(
       existing
         ? {
@@ -191,8 +204,9 @@ export default function BlockViewClient({
             target_metric_min:  existing.target_metric_min ?? '',
             target_metric_max:  existing.target_metric_max ?? '',
             description:        existing.description ?? '',
+            phase:              currentPhase,
           }
-        : EMPTY_FORM
+        : { ...EMPTY_FORM, phase: currentPhase }
     )
     setSaveError(null)
   }
@@ -205,6 +219,7 @@ export default function BlockViewClient({
     setSaving(true)
     setSaveError(null)
     try {
+      /* ── Workout save ──────────────────────────────────── */
       const payload = {
         workout_type:       form.workout_type,
         description:        form.description || null,
@@ -236,6 +251,32 @@ export default function BlockViewClient({
           a.date.localeCompare(b.date)
         )
       )
+
+      /* ── Phase override save ───────────────────────────── */
+      const weekKey      = String(modal.weekNum)
+      const calcPhase    = getPhase(modal.weekNum, block.total_weeks)
+      const prevEffective = weekPhases[weekKey] ?? calcPhase
+
+      if (form.phase !== prevEffective) {
+        const newPhases = { ...weekPhases }
+        if (form.phase !== calcPhase) {
+          newPhases[weekKey] = form.phase
+        } else {
+          delete newPhases[weekKey]
+        }
+        const blkRes = await fetch('/api/blocks', {
+          method:  'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ id: block.id, week_phases: newPhases }),
+        })
+        if (!blkRes.ok) {
+          const { error } = await blkRes.json()
+          setSaveError(error ?? 'Phase save failed')
+          return
+        }
+        setWeekPhases(newPhases)
+      }
+
       closeModal()
     } catch {
       setSaveError('Network error')
@@ -328,7 +369,14 @@ export default function BlockViewClient({
                 className="flex items-center px-2"
                 style={{ borderRight: '1px solid var(--outline-variant)' }}
               >
-                <span className="label-caps text-[var(--on-surface-variant)]" style={{ fontSize: 9 }}>
+                <span
+                  className="label-caps"
+                  style={{
+                    fontSize: 9,
+                    color:      phase === 'RACE' ? 'var(--amber)' : 'var(--on-surface-variant)',
+                    fontWeight: phase === 'RACE' ? 700 : undefined,
+                  }}
+                >
                   {phase}
                 </span>
               </div>
@@ -348,49 +396,75 @@ export default function BlockViewClient({
                 const dateStr = toDateStr(day)
                 const workout = workoutsByDate.get(dateStr)
                 const isToday = dateStr === todayStr
+                const isRace  = workout?.workout_type === 'Race'
                 return (
                   <div
                     key={di}
                     className="relative group flex flex-col justify-center px-2 py-2 cursor-pointer hover:bg-[var(--surface-container-high)]"
                     style={{
-                      borderRight: di < 6 ? '1px solid var(--outline-variant)' : undefined,
-                      borderTop: isToday ? '2px solid var(--teal)' : undefined,
-                      minHeight: 72,
+                      borderRight:     di < 6 ? '1px solid var(--outline-variant)' : undefined,
+                      borderTop:       isToday ? '2px solid var(--teal)' : undefined,
+                      minHeight:       72,
+                      ...(isRace ? {
+                        boxShadow:       '0 0 0 1px var(--amber), 0 0 12px rgba(255,179,0,0.18)',
+                        backgroundColor: 'rgba(255,179,0,0.04)',
+                      } : {}),
                     }}
-                    onClick={() => openModal(dateStr)}
+                    onClick={() => openModal(dateStr, w)}
                   >
                     {workout ? (
                       <>
-                        <TypeBadge type={workout.workout_type} />
-                        {workout.target_distance_km != null && (
-                          <span
-                            className="code-data text-[var(--on-surface)] mt-0.5"
-                            style={{ fontSize: 12 }}
-                          >
-                            {fmtDist(workout.target_distance_km)}
-                          </span>
-                        )}
-                        {workout.target_metric_type &&
-                          workout.target_metric_min &&
-                          workout.target_metric_max && (
+                        {isRace ? (
+                          <>
                             <span
-                              className="code-data text-[var(--on-surface-variant)] mt-0.5"
-                              style={{ fontSize: 10 }}
+                              className="label-caps font-bold"
+                              style={{ color: 'var(--amber)', fontSize: 9, letterSpacing: '0.08em' }}
                             >
-                              {workout.target_metric_type === 'Pace'
-                                ? `${workout.target_metric_min}–${workout.target_metric_max}`
-                                : `${workout.target_metric_min}–${workout.target_metric_max}bpm`}
+                              🏁 RACE
                             </span>
-                          )}
+                            {workout.target_distance_km != null && (
+                              <span
+                                className="code-data font-bold mt-0.5"
+                                style={{ color: 'var(--amber)', fontSize: 12 }}
+                              >
+                                {fmtDist(workout.target_distance_km)}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <TypeBadge type={workout.workout_type} />
+                            {workout.target_distance_km != null && (
+                              <span
+                                className="code-data text-[var(--on-surface)] mt-0.5"
+                                style={{ fontSize: 12 }}
+                              >
+                                {fmtDist(workout.target_distance_km)}
+                              </span>
+                            )}
+                            {workout.target_metric_type &&
+                              workout.target_metric_min &&
+                              workout.target_metric_max && (
+                                <span
+                                  className="code-data text-[var(--on-surface-variant)] mt-0.5"
+                                  style={{ fontSize: 10 }}
+                                >
+                                  {workout.target_metric_type === 'Pace'
+                                    ? `${workout.target_metric_min}–${workout.target_metric_max}`
+                                    : `${workout.target_metric_min}–${workout.target_metric_max}bpm`}
+                                </span>
+                              )}
+                          </>
+                        )}
 
-                        {/* Description tooltip — above cell by default, below for W1 to avoid clipping */}
+                        {/* Description tooltip — below for W1 to avoid clipping by scroll edge */}
                         {workout.description && (
                           <div
                             className={`absolute left-1/2 -translate-x-1/2 hidden group-hover:block z-20 pointer-events-none whitespace-nowrap ${w === 1 ? 'top-full mt-1.5' : 'bottom-full mb-1.5'}`}
                             style={{
                               backgroundColor: 'var(--surface-container-lowest)',
-                              border: '1px solid var(--teal)',
-                              padding: '4px 8px',
+                              border:          `1px solid ${isRace ? 'var(--amber)' : 'var(--teal)'}`,
+                              padding:         '4px 8px',
                             }}
                           >
                             <span className="code-data text-[var(--on-surface)]" style={{ fontSize: 11 }}>
@@ -434,7 +508,7 @@ export default function BlockViewClient({
             <div
               className="flex items-center justify-between px-4 py-2"
               style={{
-                borderBottom: '1px solid var(--outline-variant)',
+                borderBottom:    '1px solid var(--outline-variant)',
                 backgroundColor: 'var(--surface-container-low)',
               }}
             >
@@ -462,9 +536,9 @@ export default function BlockViewClient({
                   className="code-data px-2 py-1.5"
                   style={{
                     backgroundColor: 'var(--surface-container-high)',
-                    color: 'var(--on-surface)',
-                    border: '1px solid var(--outline-variant)',
-                    outline: 'none',
+                    color:           'var(--on-surface)',
+                    border:          '1px solid var(--outline-variant)',
+                    outline:         'none',
                   }}
                 >
                   {WORKOUT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -495,9 +569,9 @@ export default function BlockViewClient({
                   className="code-data px-2 py-1.5"
                   style={{
                     backgroundColor: 'var(--surface-container-high)',
-                    color: 'var(--on-surface)',
-                    border: '1px solid var(--outline-variant)',
-                    outline: 'none',
+                    color:           'var(--on-surface)',
+                    border:          '1px solid var(--outline-variant)',
+                    outline:         'none',
                   }}
                 >
                   {METRIC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -543,6 +617,27 @@ export default function BlockViewClient({
                 />
               </label>
 
+              {/* week phase */}
+              <label className="flex flex-col gap-1">
+                <span className="label-caps text-[var(--on-surface-variant)]">
+                  WEEK_PHASE{' '}
+                  <span style={{ opacity: 0.45 }}>W{modal.weekNum}</span>
+                </span>
+                <select
+                  value={form.phase}
+                  onChange={e => setForm(f => ({ ...f, phase: e.target.value }))}
+                  className="code-data px-2 py-1.5"
+                  style={{
+                    backgroundColor: 'var(--surface-container-high)',
+                    color:           'var(--on-surface)',
+                    border:          '1px solid var(--outline-variant)',
+                    outline:         'none',
+                  }}
+                >
+                  {PHASE_TYPES.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </label>
+
               {saveError && (
                 <span className="label-caps" style={{ color: 'var(--error)' }}>
                   ERR: {saveError}
@@ -568,9 +663,9 @@ export default function BlockViewClient({
                 className="label-caps px-4 py-2"
                 style={{
                   backgroundColor: saving ? 'var(--surface-container-high)' : 'var(--teal)',
-                  color: saving ? 'var(--on-surface-variant)' : '#000',
-                  border: '1px solid transparent',
-                  cursor: saving ? 'not-allowed' : 'pointer',
+                  color:           saving ? 'var(--on-surface-variant)' : '#000',
+                  border:          '1px solid transparent',
+                  cursor:          saving ? 'not-allowed' : 'pointer',
                 }}
               >
                 {saving ? 'SAVING…' : 'SAVE'}

@@ -15,7 +15,7 @@ export default async function BlockViewPage() {
 
   const { data: blocks } = await supabase
     .from('blocks')
-    .select('id, name, race_date, start_date, total_weeks')
+    .select('id, name, race_date, start_date, total_weeks, week_phases')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(1)
@@ -36,5 +36,10 @@ export default async function BlockViewPage() {
     .eq('block_id', block.id)
     .order('date')
 
-  return <BlockViewClient block={block} workouts={workouts ?? []} />
+  return (
+    <BlockViewClient
+      block={{ ...block, week_phases: (block.week_phases as Record<string, string>) ?? {} }}
+      workouts={workouts ?? []}
+    />
+  )
 }

@@ -1,5 +1,6 @@
 "use client"
 
+import React from "react"
 import Link from "next/link"
 import {
   BarChart,
@@ -47,8 +48,17 @@ function fmtDate(dateStr: string): string {
   return `${dow} ${d.getDate()}`
 }
 
-function fmtDist(km: number): string {
+function fmtDist(km: number | null): string {
+  if (km == null) return "--"
   return `${km.toFixed(1)}k`
+}
+
+function todayStr(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const dd = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${dd}`
 }
 
 function daysToRace(raceDate: string): number {
@@ -94,30 +104,64 @@ function HrvBar(props: {
   )
 }
 
+/* ─── Workout type cell ─────────────────────────────────── */
+
+const WORKOUT_TYPE_COLOR: Record<string, string> = {
+  Easy:     "var(--teal)",
+  Tempo:    "var(--amber)",
+  Interval: "#ffb300",
+  Long:     "#c084fc",
+  Race:     "var(--amber)",
+  Strength: "var(--on-surface-variant)",
+  Rest:     "var(--on-surface-variant)",
+}
+
+function WorkoutTypeCell({ type }: { type: string }) {
+  const color = WORKOUT_TYPE_COLOR[type] ?? "var(--on-surface-variant)"
+  const isRace = type === "Race"
+  return (
+    <span
+      className="code-data"
+      style={{ color, fontWeight: isRace ? 700 : 400 }}
+    >
+      {isRace ? `🏁 ${type}` : type}
+    </span>
+  )
+}
+
 /* ─── Comply square ─────────────────────────────────────── */
 
 function ComplySquare({ comply }: { comply: MergedDayRow["comply"] }) {
-  if (comply === "full")
+  if (comply == null) return null
+  if (comply === "green")
     return (
       <span
         className="inline-block"
         style={{ width: 8, height: 8, backgroundColor: "var(--teal)", flexShrink: 0 }}
       />
     )
-  if (comply === "partial")
+  if (comply === "amber")
     return (
       <span
         className="inline-block"
         style={{ width: 8, height: 8, backgroundColor: "var(--amber)", flexShrink: 0 }}
       />
     )
+  if (comply === "red")
+    return (
+      <span
+        className="inline-block"
+        style={{ width: 8, height: 8, backgroundColor: "#e05252", flexShrink: 0 }}
+      />
+    )
+  // "upcoming"
   return (
     <span
       className="inline-block"
       style={{
         width: 8,
         height: 8,
-        border: "1px solid var(--amber)",
+        border: "1px solid var(--outline-variant)",
         backgroundColor: "transparent",
         flexShrink: 0,
       }}
@@ -183,8 +227,9 @@ export default function TrainingPlanClient({
   ]
 
   const weekNum = block ? blockWeekNum(block.start_date) : null
-  const completedCount = weekData?.filter((r) => r.comply !== "upcoming").length ?? 0
-  const totalCount = weekData?.length ?? 0
+  const today = todayStr()
+  const completedCount = weekData?.filter((r) => !r.isRestDay && r.comply !== null && r.comply !== "upcoming").length ?? 0
+  const totalCount = weekData?.filter((r) => !r.isRestDay).length ?? 0
 
   return (
     <div
@@ -297,9 +342,7 @@ export default function TrainingPlanClient({
             <span className="label-caps text-[var(--on-surface)]">
               EXECUTION_LOG{" "}
               <span className="text-[var(--on-surface-variant)]">::</span>{" "}
-              <span className="text-[var(--teal)]">
-                {weekNum != null ? `W${weekNum}` : "—"}
-              </span>
+              <span className="text-[var(--teal)]">ROLLING_15D</span>
             </span>
             <span className="label-caps text-[var(--on-surface-variant)]">
               {noBlock ? "—" : `${completedCount}/${totalCount} SESSIONS`}
@@ -323,7 +366,7 @@ export default function TrainingPlanClient({
             )}
           </div>
 
-          <div className="flex flex-col">
+          <div className="flex flex-col overflow-y-auto">
             {noBlock ? (
               <div className="px-4 py-3">
                 <span className="code-data text-[var(--on-surface-variant)]">
@@ -331,46 +374,71 @@ export default function TrainingPlanClient({
                 </span>
               </div>
             ) : weekData && weekData.length > 0 ? (
-              weekData.map((row, i) => (
-                <div
-                  key={row.date}
-                  className="grid items-center px-4 py-2.5"
-                  style={{
-                    gridTemplateColumns: "80px 1fr 70px 70px 70px 70px 55px 50px",
-                    borderBottom: "1px solid var(--outline-variant)",
-                    backgroundColor: i % 2 === 0 ? "transparent" : "var(--surface-container-low)",
-                  }}
-                >
-                  <span className="code-data text-[var(--on-surface-variant)]">
-                    {fmtDate(row.date)}
-                  </span>
-                  <span className="code-data font-medium" style={{ color: "var(--teal)" }}>
-                    {row.workoutType}
-                  </span>
-                  <span className="code-data text-[var(--on-surface)]">
-                    {fmtDist(row.targetDistKm)}
-                  </span>
-                  <span className="code-data text-[var(--on-surface)]">
-                    {row.actualDistKm != null ? fmtDist(row.actualDistKm) : "--"}
-                  </span>
-                  <span className="code-data text-[var(--on-surface)]">
-                    {row.targetPaceSec != null ? fmtPace(row.targetPaceSec) : "--"}
-                  </span>
-                  <span className="code-data text-[var(--on-surface)]">
-                    {row.actualPaceStr ?? "--"}
-                  </span>
-                  <span className="code-data text-[var(--on-surface)]">
-                    {row.avgHr != null ? String(Math.round(row.avgHr)) : "--"}
-                  </span>
-                  <div className="flex items-center">
-                    <ComplySquare comply={row.comply} />
+              weekData.map((row) => {
+                const isToday = row.date === today
+                const isFuture = row.comply === "upcoming"
+                const rowStyle: React.CSSProperties = {
+                  gridTemplateColumns: "80px 1fr 70px 70px 70px 70px 55px 50px",
+                  borderBottom: "1px solid var(--outline-variant)",
+                  paddingLeft: isToday ? "13px" : "16px",
+                  paddingRight: "16px",
+                  borderLeft: isToday ? "3px solid var(--teal)" : undefined,
+                  backgroundColor: isToday ? "rgba(45, 219, 222, 0.05)" : "transparent",
+                }
+
+                if (row.isRestDay) {
+                  return (
+                    <div key={row.date} className="grid items-center py-2" style={rowStyle}>
+                      <span className="code-data text-[var(--on-surface-variant)]">
+                        {fmtDate(row.date)}
+                      </span>
+                      <span className="code-data" style={{ color: "var(--on-surface-variant)", opacity: 0.4 }}>
+                        REST
+                      </span>
+                      <span /><span /><span /><span /><span /><span />
+                    </div>
+                  )
+                }
+
+                return (
+                  <div key={row.date} className="grid items-center py-2.5" style={rowStyle}>
+                    <span className="code-data text-[var(--on-surface-variant)]">
+                      {fmtDate(row.date)}
+                    </span>
+                    <WorkoutTypeCell type={row.workoutType} />
+                    <span className="code-data text-[var(--on-surface)]">
+                      {fmtDist(row.targetDistKm)}
+                    </span>
+                    <span className="code-data text-[var(--on-surface)]">
+                      {!isFuture ? fmtDist(row.actualDistKm) : "--"}
+                    </span>
+                    <span className="code-data text-[var(--on-surface)]">
+                      {row.targetPaceSec != null ? fmtPace(row.targetPaceSec) : "--"}
+                    </span>
+                    <span className="code-data text-[var(--on-surface)]">
+                      {!isFuture ? (row.actualPaceStr ?? "--") : "--"}
+                    </span>
+                    <span className="code-data text-[var(--on-surface)]">
+                      {!isFuture && row.avgHr != null ? String(Math.round(row.avgHr)) : "--"}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <ComplySquare comply={row.comply} />
+                      {row.segmentTarget && !isFuture && (
+                        <span
+                          className="label-caps text-[var(--on-surface-variant)]"
+                          style={{ fontSize: 9 }}
+                        >
+                          SEG
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             ) : (
               <div className="px-4 py-3">
                 <span className="code-data text-[var(--on-surface-variant)]">
-                  NO_SESSIONS — no workouts scheduled for this week
+                  NO_SESSIONS — no workouts scheduled for this period
                 </span>
               </div>
             )}

@@ -3,16 +3,6 @@ import { getMetricsSummary } from "@/lib/hermes"
 import { mergeWeekData } from "@/lib/supabase/training"
 import TrainingPlanClient from "./TrainingPlanClient"
 
-function getCurrentMonday(): Date {
-  const today = new Date()
-  const day = today.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  const monday = new Date(today)
-  monday.setDate(today.getDate() + diff)
-  monday.setHours(0, 0, 0, 0)
-  return monday
-}
-
 export default async function TrainingBlocksPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -43,7 +33,7 @@ export default async function TrainingBlocksPage() {
     return <TrainingPlanClient metrics={metrics} weekData={null} noBlock block={null} raceConfig={raceConfig} />
   }
 
-  const weekData = await mergeWeekData(block.id, user.id, getCurrentMonday()).catch(() => [])
+  const weekData = await mergeWeekData(block.id, user.id).catch(() => [])
 
   return (
     <TrainingPlanClient
