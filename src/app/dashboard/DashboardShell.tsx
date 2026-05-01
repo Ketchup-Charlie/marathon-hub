@@ -15,6 +15,7 @@ import {
   Stethoscope,
   Bell,
   Settings,
+  Upload,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { calcPaces } from "@/lib/pace"
@@ -29,6 +30,7 @@ const PRIMARY_NAV = [
   { label: "GEAR_LAB",        href: "/dashboard/gear-lab",        icon: Package         },
   { label: "RECOVERY_SCORE",  href: "/dashboard/recovery-score",  icon: Zap             },
   { label: "SCHEDULE_ENGINE", href: "/dashboard/schedule-engine", icon: CalendarClock   },
+  { label: "UPLOAD",          href: "/dashboard/upload",          icon: Upload          },
 ]
 
 const BOTTOM_NAV = [

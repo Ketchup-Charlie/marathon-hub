@@ -228,8 +228,8 @@ export default function TrainingPlanClient({
 
   const weekNum = block ? blockWeekNum(block.start_date) : null
   const today = todayStr()
-  const completedCount = weekData?.filter((r) => !r.isRestDay && r.comply !== null && r.comply !== "upcoming").length ?? 0
-  const totalCount = weekData?.filter((r) => !r.isRestDay).length ?? 0
+  const completedCount = weekData?.filter((r) => r.dayType === "planned" && r.comply !== null && r.comply !== "upcoming").length ?? 0
+  const totalCount = weekData?.filter((r) => r.dayType === "planned").length ?? 0
 
   return (
     <div
@@ -386,16 +386,71 @@ export default function TrainingPlanClient({
                   backgroundColor: isToday ? "rgba(45, 219, 222, 0.05)" : "transparent",
                 }
 
-                if (row.isRestDay) {
+                // ── empty + no run ───────────────────────────
+                if (row.dayType === "empty" && row.actualDistKm == null) {
                   return (
                     <div key={row.date} className="grid items-center py-2" style={rowStyle}>
+                      <span className="code-data text-[var(--on-surface-variant)]">
+                        {fmtDate(row.date)}
+                      </span>
+                      <span className="code-data" style={{ color: "var(--on-surface-variant)", opacity: 0.3 }}>
+                        EMPTY
+                      </span>
+                      <span /><span /><span /><span /><span /><span />
+                    </div>
+                  )
+                }
+
+                // ── empty + run ──────────────────────────────
+                if (row.dayType === "empty") {
+                  return (
+                    <div key={row.date} className="grid items-center py-2.5" style={rowStyle}>
+                      <span className="code-data text-[var(--on-surface-variant)]">
+                        {fmtDate(row.date)}
+                      </span>
+                      <span className="code-data text-[var(--on-surface-variant)]">
+                        {row.runTypeTag ?? "UNPLANNED"}
+                      </span>
+                      <span className="code-data text-[var(--on-surface)]">--</span>
+                      <span className="code-data text-[var(--on-surface)]">
+                        {fmtDist(row.actualDistKm)}
+                      </span>
+                      <span className="code-data text-[var(--on-surface)]">--</span>
+                      <span className="code-data text-[var(--on-surface)]">
+                        {row.actualPaceStr ?? "--"}
+                      </span>
+                      <span className="code-data text-[var(--on-surface)]">
+                        {row.avgHr != null ? String(Math.round(row.avgHr)) : "--"}
+                      </span>
+                      <span />
+                    </div>
+                  )
+                }
+
+                // ── rest (with or without run) ───────────────
+                if (row.dayType === "rest") {
+                  return (
+                    <div key={row.date} className="grid items-center py-2.5" style={rowStyle}>
                       <span className="code-data text-[var(--on-surface-variant)]">
                         {fmtDate(row.date)}
                       </span>
                       <span className="code-data" style={{ color: "var(--on-surface-variant)", opacity: 0.4 }}>
                         REST
                       </span>
-                      <span /><span /><span /><span /><span /><span />
+                      <span className="code-data text-[var(--on-surface)]">--</span>
+                      <span className="code-data text-[var(--on-surface)]">
+                        {row.actualDistKm != null ? fmtDist(row.actualDistKm) : "--"}
+                      </span>
+                      <span className="code-data text-[var(--on-surface)]">--</span>
+                      <span className="code-data text-[var(--on-surface)]">
+                        {row.actualPaceStr ?? "--"}
+                      </span>
+                      <span className="code-data text-[var(--on-surface)]">
+                        {row.avgHr != null ? String(Math.round(row.avgHr)) : "--"}
+                      </span>
+                      <div className="flex items-center">
+                        <ComplySquare comply={row.comply} />
+                      </div>
                     </div>
                   )
                 }

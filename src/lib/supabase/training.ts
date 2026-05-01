@@ -9,13 +9,14 @@ export type BlockInfo = {
 
 export type MergedDayRow = {
   date: string
-  isRestDay: boolean
+  dayType: "planned" | "rest" | "empty"
   workoutType: string
   targetDistKm: number | null
   actualDistKm: number | null
   targetPaceSec: number | null
   actualPaceStr: string | null
   avgHr: number | null
+  runTypeTag: string | null
   comply: "green" | "amber" | "red" | "upcoming" | null
   segmentTarget: boolean
 }
@@ -140,7 +141,10 @@ function computeComply(
 ): "green" | "amber" | "red" | "upcoming" {
   if (isFuture) return "upcoming"
 
-  if (workoutType === "Rest" || workoutType === "Strength") {
+  if (workoutType === "Rest") {
+    return actualDist == null ? "green" : "red"
+  }
+  if (workoutType === "Strength") {
     return actualDist == null ? "green" : "amber"
   }
 
@@ -181,7 +185,7 @@ export async function getCompletedRuns(userId: string, fromDate: string, toDate:
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("completed_runs")
-    .select("id, date, total_distance, avg_pace, avg_hr")
+    .select("id, date, total_distance, avg_pace, avg_hr, run_type_tag")
     .eq("user_id", userId)
     .gte("date", fromDate)
     .lte("date", toDate)
@@ -220,19 +224,22 @@ export async function mergeWeekData(
     if (!pw) {
       return {
         date,
-        isRestDay:    true,
-        workoutType:  "",
-        targetDistKm: null,
-        actualDistKm: null,
+        dayType:       "empty",
+        workoutType:   run?.run_type_tag ?? "",
+        targetDistKm:  null,
+        actualDistKm:  run?.total_distance ?? null,
         targetPaceSec: null,
-        actualPaceStr: null,
-        avgHr:        null,
-        comply:       null,
+        actualPaceStr: run?.avg_pace ?? null,
+        avgHr:         run?.avg_hr ?? null,
+        runTypeTag:    run?.run_type_tag ?? null,
+        comply:        null,
         segmentTarget: false,
       } satisfies MergedDayRow
     }
 
     const isFuture = date > todayStr
+    const dayType: "planned" | "rest" =
+      pw.workout_type === "Rest" ? "rest" : "planned"
 
     let targetPaceSec: number | null = null
     if (pw.target_metric_type === "Pace") {
@@ -243,13 +250,14 @@ export async function mergeWeekData(
 
     return {
       date,
-      isRestDay:    false,
+      dayType,
       workoutType:  pw.workout_type,
       targetDistKm: pw.target_distance_km ?? null,
       actualDistKm: run?.total_distance ?? null,
       targetPaceSec,
       actualPaceStr: run?.avg_pace ?? null,
-      avgHr:        run?.avg_hr ?? null,
+      avgHr:         run?.avg_hr ?? null,
+      runTypeTag:    run?.run_type_tag ?? null,
       comply: computeComply(
         pw.workout_type,
         pw.target_distance_km ?? null,
