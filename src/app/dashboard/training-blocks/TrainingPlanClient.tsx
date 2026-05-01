@@ -8,11 +8,11 @@ import {
   XAxis,
   ResponsiveContainer,
 } from "recharts"
-import type { MetricsSummary } from "@/lib/hermes"
+import type { MetricsSummary, MomentumDay } from "@/lib/hermes"
 import type { MergedDayRow, BlockInfo } from "@/lib/supabase/training"
 import { fmtPace } from "@/lib/pace"
 
-/* ─── Static data ───────────────────────────────────────── */
+/* ─── HRV static data ───────────────────────────────────── */
 
 const HRV_DATA = [
   { week: "W1",  hrv: 61, isLatest: false },
@@ -27,17 +27,6 @@ const HRV_DATA = [
   { week: "W10", hrv: 69, isLatest: false },
   { week: "W11", hrv: 67, isLatest: false },
   { week: "W12", hrv: 68, isLatest: true  },
-]
-
-// 13 cols × 7 rows — 0=dim, 1=teal, 2=amber, 3=surface-high
-const HEATMAP: number[][] = [
-  [3, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1],
-  [1, 1, 3, 1, 1, 1, 1, 2, 1, 1, 3, 1, 1],
-  [1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1],
-  [3, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2],
-  [1, 1, 1, 1, 1, 1, 3, 1, 1, 1, 1, 1, 1],
-  [1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1],
-  [1, 1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 2, 1],
 ]
 
 /* ─── Date helpers ──────────────────────────────────────── */
@@ -107,7 +96,7 @@ function HrvBar(props: {
 /* ─── Workout type cell ─────────────────────────────────── */
 
 const WORKOUT_TYPE_COLOR: Record<string, string> = {
-  Easy:     "var(--teal)",
+  Easy:     "#4ade80",
   Tempo:    "var(--amber)",
   Interval: "#ffb300",
   Long:     "#c084fc",
@@ -169,6 +158,75 @@ function ComplySquare({ comply }: { comply: MergedDayRow["comply"] }) {
   )
 }
 
+/* ─── Momentum heatmap ──────────────────────────────────── */
+
+function squareStyle(day: MomentumDay | undefined): React.CSSProperties {
+  if (day?.hasRun)     return { backgroundColor: "var(--teal)" }
+  if (day?.hasPlanned) return { backgroundColor: "transparent", border: "1px solid var(--amber)" }
+  return { backgroundColor: "#1a2027" }
+}
+
+function MomentumHeatmap({ days }: { days: MomentumDay[] }) {
+  const dayMap = new Map(days.map((d) => [d.date, d]))
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  return (
+    <div className="flex flex-col p-4 flex-shrink-0" style={{ borderBottom: "1px solid var(--outline-variant)" }}>
+      <span className="label-caps text-[var(--on-surface-variant)] mb-3">MOMENTUM</span>
+
+      <div className="flex flex-col" style={{ gap: 3 }}>
+        {Array.from({ length: 6 }, (_, row) => (
+          <div
+            key={row}
+            style={{ display: "grid", gridTemplateColumns: "repeat(14, 1fr)", gap: 3 }}
+          >
+            {Array.from({ length: 14 }, (_, col) => {
+              const idx = row * 14 + col
+              const d = new Date(today)
+              d.setDate(d.getDate() - idx)
+              const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+              const day = dayMap.get(date)
+              return (
+                <span
+                  key={col}
+                  title={date}
+                  style={{
+                    aspectRatio: "1",
+                    minWidth: 13,
+                    minHeight: 13,
+                    display: "block",
+                    ...squareStyle(day),
+                  }}
+                />
+              )
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 mt-3">
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block" style={{ width: 8, height: 8, backgroundColor: "var(--teal)" }} />
+          <span className="label-caps text-[var(--on-surface-variant)]">RAN</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span
+            className="inline-block"
+            style={{ width: 8, height: 8, border: "1px solid var(--amber)", backgroundColor: "transparent" }}
+          />
+          <span className="label-caps text-[var(--on-surface-variant)]">MISSED</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block" style={{ width: 8, height: 8, backgroundColor: "#1a2027" }} />
+          <span className="label-caps text-[var(--on-surface-variant)]">REST</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ─── Client component ──────────────────────────────────── */
 
 export default function TrainingPlanClient({
@@ -177,12 +235,14 @@ export default function TrainingPlanClient({
   noBlock,
   block,
   raceConfig,
+  momentumDays,
 }: {
   metrics: MetricsSummary | null
   weekData: MergedDayRow[] | null
   noBlock: boolean
   block?: BlockInfo | null
   raceConfig: { race_name: string | null; race_date: string | null } | null
+  momentumDays: MomentumDay[]
 }) {
   const raceName = raceConfig?.race_name ?? block?.name ?? null
   const raceDate = raceConfig?.race_date ?? block?.race_date ?? null
@@ -503,39 +563,7 @@ export default function TrainingPlanClient({
         {/* Right: Heatmap + HRV chart */}
         <div className="flex flex-col flex-1 min-w-0">
 
-          {/* 90D_CONSISTENCY heatmap */}
-          <div
-            className="flex flex-col p-4 flex-shrink-0"
-            style={{ borderBottom: "1px solid var(--outline-variant)" }}
-          >
-            <span className="label-caps text-[var(--on-surface-variant)] mb-3">
-              90D_CONSISTENCY
-            </span>
-            <div className="flex flex-col w-full" style={{ gap: 3 }}>
-              {HEATMAP.map((row, ri) => (
-                <div
-                  key={ri}
-                  style={{ display: "grid", gridTemplateColumns: "repeat(13, 1fr)", gap: 3 }}
-                >
-                  {row.map((cell, ci) => (
-                    <span
-                      key={ci}
-                      style={{
-                        aspectRatio: "1",
-                        minWidth: 14,
-                        minHeight: 14,
-                        backgroundColor:
-                          cell === 1 ? "var(--teal)"
-                          : cell === 2 ? "var(--amber)"
-                          : cell === 3 ? "var(--surface-container-high)"
-                          : "var(--surface-container)",
-                      }}
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
+          <MomentumHeatmap days={momentumDays} />
 
           {/* HRV_TREND_12W */}
           <div className="flex flex-col p-4">

@@ -30,7 +30,7 @@ COMPLIANCE_MAP = {
 }
 
 
-def upload(run: dict, user_id: str, shoe_id: str | None, compliance: str | None, run_type_tag: str | None):
+def upload(run: dict, user_id: str, shoe_id: str | None, compliance: str | None, run_type_tag: str | None, title: str | None = None):
     url = os.environ["NEXT_PUBLIC_SUPABASE_URL"]
     key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
     sb = create_client(url, key)
@@ -41,7 +41,7 @@ def upload(run: dict, user_id: str, shoe_id: str | None, compliance: str | None,
     run_row = {
         "user_id": user_id,
         "date": run.get("date"),
-        "title": run.get("title"),
+        "title": title if title else run.get("title"),
         "run_type_tag": run_type_tag,
         "total_distance": run.get("total_distance"),
         "total_time": run.get("total_time"),
@@ -108,6 +108,7 @@ def main():
     parser.add_argument("--shoe-id", default=None)
     parser.add_argument("--compliance", default=None, choices=["green", "yellow", "red"])
     parser.add_argument("--run-type-tag", default=None)
+    parser.add_argument("--title", default=None)
     args = parser.parse_args()
 
     raw = sys.stdin.read()
@@ -122,7 +123,7 @@ def main():
         sys.exit(1)
 
     try:
-        run_id = upload(run, args.user_id, args.shoe_id, args.compliance, args.run_type_tag)
+        run_id = upload(run, args.user_id, args.shoe_id, args.compliance, args.run_type_tag, args.title)
         print(json.dumps({"success": True, "run_id": run_id}))
     except Exception as e:
         print(json.dumps({"error": str(e)}))

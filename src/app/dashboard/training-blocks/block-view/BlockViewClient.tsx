@@ -46,7 +46,7 @@ type FormState = {
 /* ─── Constants ──────────────────────────────────────────── */
 
 const TYPE_COLOR: Record<string, string> = {
-  Easy:     'var(--teal)',
+  Easy:     '#4ade80',
   Tempo:    'var(--amber)',
   Interval: '#ffb300',
   Long:     '#c084fc',

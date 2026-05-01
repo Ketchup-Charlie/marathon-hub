@@ -9,12 +9,13 @@ const UPLOADER = join(process.cwd(), 'parser', 'upload.py')
 function runUploader(
   jsonStr: string,
   userId: string,
-  opts: { shoeId?: string | null; runTypeTag?: string | null },
+  opts: { shoeId?: string | null; runTypeTag?: string | null; title?: string | null },
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const args = [UPLOADER, '--user-id', userId]
     if (opts.shoeId)     args.push('--shoe-id',       opts.shoeId)
     if (opts.runTypeTag) args.push('--run-type-tag',   opts.runTypeTag)
+    if (opts.title)      args.push('--title',          opts.title)
 
     const proc = spawn(PYTHON, args)
     let stdout = ''
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
 
   let body: {
     parsedRun: Record<string, unknown>
+    title?: string | null
     run_type_tag?: string | null
     shoe_id?: string | null
     notes?: string | null
@@ -48,7 +50,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { parsedRun, run_type_tag, shoe_id, notes } = body
+  const { parsedRun, title, run_type_tag, shoe_id, notes } = body
   if (!parsedRun || typeof parsedRun !== 'object') {
     return Response.json({ error: 'Missing parsedRun' }, { status: 400 })
   }
@@ -58,6 +60,7 @@ export async function POST(req: NextRequest) {
     stdout = await runUploader(JSON.stringify(parsedRun), user.id, {
       shoeId: shoe_id ?? null,
       runTypeTag: run_type_tag ?? null,
+      title: title ?? null,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

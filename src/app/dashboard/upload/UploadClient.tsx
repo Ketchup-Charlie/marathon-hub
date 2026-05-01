@@ -79,6 +79,7 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
   const [isDragging, setIsDragging] = useState(false)
   const [isHovering, setIsHovering] = useState(false)
   const [parsed, setParsed]       = useState<ParsedRun | null>(null)
+  const [editedTitle, setEditedTitle] = useState("")
   const [runTypeTag, setRunTypeTag] = useState("")
   const [shoeId, setShoeId]       = useState("")
   const [notes, setNotes]         = useState("")
@@ -137,6 +138,7 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
       }
       const run = data as ParsedRun
       setParsed(run)
+      setEditedTitle(run.title ?? "")
       setRunTypeTag(run.title ?? "")
       setStage("parsed")
     } catch {
@@ -157,6 +159,7 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           parsedRun:    parsed,
+          title:        editedTitle || null,
           run_type_tag: runTypeTag || null,
           shoe_id:      shoeId     || null,
           notes:        notes      || null,
@@ -182,6 +185,7 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
     setStage("idle")
     setFile(null)
     setParsed(null)
+    setEditedTitle("")
     setRunTypeTag("")
     setShoeId("")
     setNotes("")
@@ -339,7 +343,30 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
                 backgroundColor: "var(--outline-variant)",
               }}
             >
-              <SummaryRow label="TITLE"    value={parsed.title ?? "--"} />
+              {/* TITLE — editable */}
+              <div
+                className="flex items-center px-4 py-2 label-caps text-[var(--on-surface-variant)]"
+                style={{ backgroundColor: "var(--surface-container-low)" }}
+              >
+                TITLE
+              </div>
+              <div
+                className="flex items-center px-4 py-2"
+                style={{ backgroundColor: "var(--surface)" }}
+              >
+                <input
+                  type="text"
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  disabled={stage === "uploading" || stage === "success"}
+                  className="code-data text-[var(--on-surface)] bg-transparent outline-none w-full"
+                  style={{
+                    borderBottom: "1px solid var(--outline-variant)",
+                    caretColor: "var(--teal)",
+                  }}
+                  spellCheck={false}
+                />
+              </div>
               <SummaryRow label="DATE"     value={parsed.date ?? "--"} />
               <SummaryRow
                 label="DISTANCE"

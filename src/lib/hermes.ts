@@ -1,7 +1,7 @@
 const BASE = process.env.HERMES_API_URL
 const KEY  = process.env.HERMES_API_KEY
 
-/* ─── Raw API shape ─────────────────────────────────────── */
+/* ─── Raw API shapes ────────────────────────────────────── */
 
 type HermesRaw = {
   hrv: {
@@ -19,7 +19,11 @@ type HermesRaw = {
   }
 }
 
-/* ─── Public type ───────────────────────────────────────── */
+type ConsistencyRaw = {
+  daily_running: { date: string; total_distance_km: number }[]
+}
+
+/* ─── Public types ──────────────────────────────────────── */
 
 export type MetricsSummary = {
   hrv_baseline_ms:    number
@@ -29,6 +33,13 @@ export type MetricsSummary = {
   cadence_avg_spm:    number
   avg_gct_ms:         number
   avg_vertical_ratio: number
+}
+
+export type MomentumDay = {
+  date:        string
+  hasRun:      boolean
+  isAmber:     boolean
+  hasPlanned:  boolean
 }
 
 /* ─── Fetcher ───────────────────────────────────────────── */
@@ -56,4 +67,9 @@ export async function getMetricsSummary(): Promise<MetricsSummary> {
     avg_gct_ms:         raw.mechanics.avg_gct,
     avg_vertical_ratio: raw.mechanics.avg_vertical_ratio,
   }
+}
+
+export async function getConsistencyData(): Promise<{ date: string; total_distance_km: number }[]> {
+  const raw = await hermesFetch<ConsistencyRaw>("/metrics/consistency")
+  return raw.daily_running ?? []
 }
