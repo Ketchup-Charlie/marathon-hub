@@ -36,6 +36,7 @@ def upload(run: dict, user_id: str, shoe_id: str | None, compliance: str | None,
     sb = create_client(url, key)
 
     laps = run.pop("laps", [])
+    timeseries = run.pop("timeseries", [])
 
     run_row = {
         "user_id": user_id,
@@ -77,9 +78,26 @@ def upload(run: dict, user_id: str, shoe_id: str | None, compliance: str | None,
             }
             for lap in laps
         ]
-        # Strip None values per row
         lap_rows = [{k: v for k, v in row.items() if v is not None} for row in lap_rows]
         sb.table("run_laps").insert(lap_rows).execute()
+
+    if timeseries:
+        ts_rows = [
+            {
+                "run_id": run_id,
+                "seconds_elapsed": pt["seconds_elapsed"],
+                "distance_km": pt.get("distance_km"),
+                "pace_sec_per_km": pt.get("pace_sec_per_km"),
+                "hr": pt.get("hr"),
+                "cadence": pt.get("cadence"),
+                "elevation_m": pt.get("elevation_m"),
+                "lat": pt.get("lat"),
+                "lon": pt.get("lon"),
+            }
+            for pt in timeseries
+        ]
+        ts_rows = [{k: v for k, v in row.items() if v is not None} for row in ts_rows]
+        sb.table("run_timeseries").insert(ts_rows).execute()
 
     return run_id
 

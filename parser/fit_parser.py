@@ -161,6 +161,67 @@ def parse_session(fitfile: FitFile) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Timeseries parsing
+# ---------------------------------------------------------------------------
+
+_SEMICIRCLE_TO_DEG = 180.0 / (2 ** 31)
+
+
+def parse_timeseries(fitfile: FitFile, interval: int = 10) -> list:
+    t0 = None
+    for msg in fitfile.get_messages("session"):
+        d = _msg_to_dict(msg)
+        t0 = d.get("start_time")
+        break
+
+    points = []
+    for i, msg in enumerate(fitfile.get_messages("record")):
+        if i % interval != 0:
+            continue
+        rec = _msg_to_dict(msg)
+        ts = rec.get("timestamp")
+        if ts is None:
+            continue
+        if t0 is None:
+            t0 = ts
+
+        try:
+            elapsed = int((ts - t0).total_seconds())
+        except Exception:
+            continue
+
+        speed = rec.get("enhanced_speed") or rec.get("speed")  # m/s
+        pace = round(1000 / speed) if speed and speed > 0 else None
+
+        raw_lat = rec.get("position_lat")
+        raw_lon = rec.get("position_long")
+        lat = round(raw_lat * _SEMICIRCLE_TO_DEG, 6) if raw_lat is not None else None
+        lon = round(raw_lon * _SEMICIRCLE_TO_DEG, 6) if raw_lon is not None else None
+
+        raw_cadence = rec.get("cadence")
+        cadence = int(raw_cadence * 2) if raw_cadence is not None else None
+
+        distance = rec.get("distance")  # metres
+        distance_km = round(distance / 1000, 3) if distance is not None else None
+
+        altitude = rec.get("enhanced_altitude") or rec.get("altitude")
+        elevation_m = round(altitude, 1) if altitude is not None else None
+
+        points.append({
+            "seconds_elapsed": elapsed,
+            "distance_km": distance_km,
+            "pace_sec_per_km": pace,
+            "hr": rec.get("heart_rate"),
+            "cadence": cadence,
+            "elevation_m": elevation_m,
+            "lat": lat,
+            "lon": lon,
+        })
+
+    return points
+
+
+# ---------------------------------------------------------------------------
 # Lap parsing
 # ---------------------------------------------------------------------------
 
@@ -226,7 +287,7 @@ def main():
         sys.exit(1)
 
     if debug:
-        for label, msg_type, limit in [("SESSION", "session", 1), ("LAP 1", "lap", 1)]:
+        for label, msg_type, limit in [("SESSION", "session", 1), ("LAP 1", "lap", 1), ("RECORD 1", "record", 1)]:
             for msg in fitfile.get_messages(msg_type):
                 print(f"\n=== {label} fields ===", file=sys.stderr)
                 for field in msg:
@@ -240,10 +301,13 @@ def main():
     result = parse_session(fitfile)
     fitfile = FitFile(fit_path)
     laps = parse_laps(fitfile)
+    fitfile = FitFile(fit_path)
+    timeseries = parse_timeseries(fitfile)
 
     intents = {lap["lap_intent"] for lap in laps}
     result["single_intent"] = len(laps) <= 1 or len(intents) == 1
     result["laps"] = laps
+    result["timeseries"] = timeseries
 
     print(json.dumps(result, default=str))
 
