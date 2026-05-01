@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useState, useMemo } from "react"
 import {
   LayoutDashboard,
   CalendarDays,
@@ -16,6 +17,7 @@ import {
   Settings,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { calcPaces } from "@/lib/pace"
 
 /* ─── Nav data ──────────────────────────────────────────── */
 
@@ -30,6 +32,7 @@ const PRIMARY_NAV = [
 ]
 
 const BOTTOM_NAV = [
+  { label: "SETTINGS",     href: "/dashboard/settings",     icon: Settings    },
   { label: "SYSTEM_LOGS",  href: "/dashboard/system-logs",  icon: ScrollText  },
   { label: "DIAGNOSTICS",  href: "/dashboard/diagnostics",  icon: Stethoscope },
 ]
@@ -118,12 +121,16 @@ export default function DashboardShell({
   children,
   readinessLevel,
   readinessScore,
+  raceConfig,
 }: {
   children: React.ReactNode
   readinessLevel: ReadinessLevel
   readinessScore: number | null
+  raceConfig: { target_time: string } | null
 }) {
   const pathname = usePathname()
+  const [targetTime, setTargetTime] = useState(raceConfig?.target_time ?? "4:15:00")
+  const paces = useMemo(() => calcPaces(targetTime), [targetTime])
 
   const activeTop = TOP_TABS.reduce<(typeof TOP_TABS)[0] | null>((best, tab) => {
     if (!pathname.startsWith(tab.href)) return best
@@ -242,9 +249,72 @@ export default function DashboardShell({
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto min-h-0">
           {children}
         </main>
+
+        {/* ── PACE_CALC_V2 footer ──────────────────────────── */}
+        <div
+          className="flex items-center gap-6 px-4 flex-shrink-0"
+          style={{
+            height: 40,
+            backgroundColor: "var(--surface-container-low)",
+            borderTop: "1px solid var(--outline-variant)",
+          }}
+        >
+          <span className="label-caps flex-shrink-0" style={{ color: "var(--teal)" }}>
+            PACE_CALC_V2
+          </span>
+
+          <div className="flex items-center gap-2">
+            <span className="label-caps text-[var(--on-surface-variant)]">TARGET_TIME:</span>
+            <input
+              type="text"
+              value={targetTime}
+              onChange={(e) => setTargetTime(e.target.value)}
+              className="code-data text-[var(--teal)] bg-transparent outline-none w-24"
+              style={{
+                borderBottom: "1px solid var(--outline-variant)",
+                caretColor: "var(--teal)",
+              }}
+              placeholder="h:mm:ss"
+              spellCheck={false}
+            />
+          </div>
+
+          <div className="flex items-center gap-6 ml-auto">
+            {paces && (
+              <>
+                <span className="label-caps text-[var(--on-surface-variant)]">
+                  MP: <span className="text-[var(--on-surface)]">{paces.mp}</span>
+                </span>
+                <span className="label-caps text-[var(--on-surface-variant)]">
+                  TEMPO: <span className="text-[var(--on-surface)]">{paces.tempo}</span>
+                </span>
+                <span className="label-caps text-[var(--on-surface-variant)]">
+                  INT: <span className="text-[var(--amber)]">{paces.int}</span>
+                </span>
+                <span className="label-caps text-[var(--on-surface-variant)]">
+                  EASY: <span className="text-[var(--on-surface)]">{paces.easy}</span>
+                </span>
+              </>
+            )}
+            <div
+              className="flex items-center gap-4 pl-4"
+              style={{ borderLeft: "1px solid var(--outline-variant)" }}
+            >
+              <span className="text-[9px] uppercase tracking-widest text-[var(--on-surface-variant)]">
+                PACE_CALCULATOR_V1.0
+              </span>
+              <span className="text-[9px] uppercase tracking-widest text-[var(--on-surface-variant)]">
+                LATENCY: 12MS
+              </span>
+              <span className="text-[9px] uppercase tracking-widest text-[var(--on-surface-variant)]">
+                CORE_TEMP: 36.5C
+              </span>
+            </div>
+          </div>
+        </div>
 
       </div>
     </div>

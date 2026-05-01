@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import Link from "next/link"
 import {
   BarChart,
   Bar,
@@ -8,25 +8,10 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import type { MetricsSummary } from "@/lib/hermes"
+import type { MergedDayRow, BlockInfo } from "@/lib/supabase/training"
+import { fmtPace } from "@/lib/pace"
 
 /* ─── Static data ───────────────────────────────────────── */
-
-type SessionRow = {
-  date: string
-  type: string
-  tDist: string
-  aDist: string | null
-  tPace: string
-  aPace: string | null
-  comply: "full" | "partial" | "upcoming"
-}
-
-const SESSIONS: SessionRow[] = [
-  { date: "Mon 12", type: "RECOVERY",     tDist: "8.0k",  aDist: "8.1k",  tPace: "5:30", aPace: "5:28", comply: "full"     },
-  { date: "Tue 13", type: "INTERVALS",    tDist: "12.0k", aDist: "12.0k", tPace: "4:15", aPace: "4:12", comply: "full"     },
-  { date: "Wed 14", type: "EASY_AEROBIC", tDist: "14.0k", aDist: "10.5k", tPace: "5:00", aPace: "5:15", comply: "partial"  },
-  { date: "Thu 15", type: "TEMPO",        tDist: "16.0k", aDist: null,    tPace: "4:30", aPace: null,   comply: "upcoming" },
-]
 
 const HRV_DATA = [
   { week: "W1",  hrv: 61, isLatest: false },
@@ -54,20 +39,37 @@ const HEATMAP: number[][] = [
   [1, 1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 2, 1],
 ]
 
-/* ─── Pace calc helpers ─────────────────────────────────── */
+/* ─── Date helpers ──────────────────────────────────────── */
 
-function parseHMS(s: string): number | null {
-  const parts = s.split(":").map(Number)
-  if (parts.some(isNaN)) return null
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
-  if (parts.length === 2) return parts[0] * 60 + parts[1]
-  return null
+function fmtDate(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00")
+  const dow = d.toLocaleDateString("en-US", { weekday: "short" })
+  return `${dow} ${d.getDate()}`
 }
 
-function fmtPace(secPerKm: number): string {
-  const m = Math.floor(secPerKm / 60)
-  const s = Math.round(secPerKm % 60)
-  return `${m}:${String(s).padStart(2, "0")}`
+function fmtDist(km: number): string {
+  return `${km.toFixed(1)}k`
+}
+
+function daysToRace(raceDate: string): number {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const race = new Date(raceDate + "T00:00:00")
+  return Math.max(0, Math.ceil((race.getTime() - today.getTime()) / 86_400_000))
+}
+
+function blockWeekNum(startDate: string): number {
+  const start = new Date(startDate + "T00:00:00")
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.max(1, Math.ceil((today.getTime() - start.getTime()) / (86_400_000 * 7)))
+}
+
+function fmtRaceDate(dateStr: string): string {
+  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  })
 }
 
 /* ─── HRV bar shape ─────────────────────────────────────── */
@@ -94,7 +96,7 @@ function HrvBar(props: {
 
 /* ─── Comply square ─────────────────────────────────────── */
 
-function ComplySquare({ comply }: { comply: SessionRow["comply"] }) {
+function ComplySquare({ comply }: { comply: MergedDayRow["comply"] }) {
   if (comply === "full")
     return (
       <span
@@ -127,11 +129,21 @@ function ComplySquare({ comply }: { comply: SessionRow["comply"] }) {
 
 export default function TrainingPlanClient({
   metrics,
+  weekData,
+  noBlock,
+  block,
+  raceConfig,
 }: {
   metrics: MetricsSummary | null
+  weekData: MergedDayRow[] | null
+  noBlock: boolean
+  block?: BlockInfo | null
+  raceConfig: { race_name: string | null; race_date: string | null } | null
 }) {
-  const [targetTime, setTargetTime] = useState("03:15:00")
-
+  const raceName = raceConfig?.race_name ?? block?.name ?? null
+  const raceDate = raceConfig?.race_date ?? block?.race_date ?? null
+  const raceTargetLabel =
+    [raceName, raceDate ? fmtRaceDate(raceDate) : null].filter(Boolean).join(" ") || "—"
   const METRIC_CARDS = [
     {
       label: "AVG_PACE_7D",
@@ -170,17 +182,9 @@ export default function TrainingPlanClient({
     },
   ]
 
-  const paces = useMemo(() => {
-    const total = parseHMS(targetTime)
-    if (!total) return null
-    const mp = total / 42.195
-    return {
-      mp:    fmtPace(mp),
-      tempo: fmtPace(mp * 0.939),
-      int:   fmtPace(mp * 0.848),
-      easy:  fmtPace(mp * 1.141),
-    }
-  }, [targetTime])
+  const weekNum = block ? blockWeekNum(block.start_date) : null
+  const completedCount = weekData?.filter((r) => r.comply !== "upcoming").length ?? 0
+  const totalCount = weekData?.length ?? 0
 
   return (
     <div
@@ -199,19 +203,38 @@ export default function TrainingPlanClient({
         <div className="flex items-center gap-6">
           <span className="label-caps text-[var(--on-surface-variant)]">
             BLOCK_PHASE:{" "}
-            <span className="text-[var(--teal)]">BASE_W3</span>
+            <span className="text-[var(--teal)]">
+              {block ? `BASE_W${weekNum}` : "—"}
+            </span>
           </span>
           <span className="label-caps text-[var(--on-surface-variant)]">
             RACE_TARGET:{" "}
-            <span className="text-[var(--on-surface)]">Sydney Marathon Aug 30</span>
+            <span className="text-[var(--on-surface)]">
+              {raceTargetLabel}
+            </span>
           </span>
         </div>
-        <div
-          className="flex items-center gap-2 px-3 py-1"
-          style={{ border: "1px solid var(--outline-variant)" }}
-        >
-          <span className="label-caps text-[var(--on-surface-variant)]">DAYS_TO_RACE:</span>
-          <span className="label-caps text-[var(--teal)] text-base">122</span>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard/training-blocks/block-view"
+            className="label-caps px-3 py-1 hover:text-[var(--teal)]"
+            style={{
+              border: "1px solid var(--outline-variant)",
+              color: "var(--on-surface-variant)",
+              textDecoration: "none",
+            }}
+          >
+            BLOCK_VIEW
+          </Link>
+          <div
+            className="flex items-center gap-2 px-3 py-1"
+            style={{ border: "1px solid var(--outline-variant)" }}
+          >
+            <span className="label-caps text-[var(--on-surface-variant)]">DAYS_TO_RACE:</span>
+            <span className="label-caps text-[var(--teal)] text-base">
+              {raceDate ? daysToRace(raceDate) : "—"}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -274,22 +297,24 @@ export default function TrainingPlanClient({
             <span className="label-caps text-[var(--on-surface)]">
               EXECUTION_LOG{" "}
               <span className="text-[var(--on-surface-variant)]">::</span>{" "}
-              <span className="text-[var(--teal)]">W3</span>
+              <span className="text-[var(--teal)]">
+                {weekNum != null ? `W${weekNum}` : "—"}
+              </span>
             </span>
             <span className="label-caps text-[var(--on-surface-variant)]">
-              4/7 SESSIONS
+              {noBlock ? "—" : `${completedCount}/${totalCount} SESSIONS`}
             </span>
           </div>
 
           <div
             className="grid flex-shrink-0 px-4 py-1.5"
             style={{
-              gridTemplateColumns: "80px 1fr 70px 70px 70px 70px 50px",
+              gridTemplateColumns: "80px 1fr 70px 70px 70px 70px 55px 50px",
               borderBottom: "1px solid var(--outline-variant)",
               backgroundColor: "var(--surface-container-low)",
             }}
           >
-            {["DATE", "WORKOUT_TYPE", "T_DIST", "A_DIST", "T_PACE", "A_PACE", "COMPLY"].map(
+            {["DATE", "WORKOUT_TYPE", "T_DIST", "A_DIST", "T_PACE", "A_PACE", "AVG_HR", "COMPLY"].map(
               (col) => (
                 <span key={col} className="label-caps text-[var(--on-surface-variant)]">
                   {col}
@@ -299,27 +324,56 @@ export default function TrainingPlanClient({
           </div>
 
           <div className="flex flex-col">
-            {SESSIONS.map((row, i) => (
-              <div
-                key={row.date}
-                className="grid items-center px-4 py-2.5"
-                style={{
-                  gridTemplateColumns: "80px 1fr 70px 70px 70px 70px 50px",
-                  borderBottom: "1px solid var(--outline-variant)",
-                  backgroundColor: i % 2 === 0 ? "transparent" : "var(--surface-container-low)",
-                }}
-              >
-                <span className="code-data text-[var(--on-surface-variant)]">{row.date}</span>
-                <span className="code-data font-medium" style={{ color: "var(--teal)" }}>{row.type}</span>
-                <span className="code-data text-[var(--on-surface)]">{row.tDist}</span>
-                <span className="code-data text-[var(--on-surface)]">{row.aDist ?? "--"}</span>
-                <span className="code-data text-[var(--on-surface)]">{row.tPace}</span>
-                <span className="code-data text-[var(--on-surface)]">{row.aPace ?? "--"}</span>
-                <div className="flex items-center">
-                  <ComplySquare comply={row.comply} />
-                </div>
+            {noBlock ? (
+              <div className="px-4 py-3">
+                <span className="code-data text-[var(--on-surface-variant)]">
+                  NO_ACTIVE_BLOCK — create a training block to get started
+                </span>
               </div>
-            ))}
+            ) : weekData && weekData.length > 0 ? (
+              weekData.map((row, i) => (
+                <div
+                  key={row.date}
+                  className="grid items-center px-4 py-2.5"
+                  style={{
+                    gridTemplateColumns: "80px 1fr 70px 70px 70px 70px 55px 50px",
+                    borderBottom: "1px solid var(--outline-variant)",
+                    backgroundColor: i % 2 === 0 ? "transparent" : "var(--surface-container-low)",
+                  }}
+                >
+                  <span className="code-data text-[var(--on-surface-variant)]">
+                    {fmtDate(row.date)}
+                  </span>
+                  <span className="code-data font-medium" style={{ color: "var(--teal)" }}>
+                    {row.workoutType}
+                  </span>
+                  <span className="code-data text-[var(--on-surface)]">
+                    {fmtDist(row.targetDistKm)}
+                  </span>
+                  <span className="code-data text-[var(--on-surface)]">
+                    {row.actualDistKm != null ? fmtDist(row.actualDistKm) : "--"}
+                  </span>
+                  <span className="code-data text-[var(--on-surface)]">
+                    {row.targetPaceSec != null ? fmtPace(row.targetPaceSec) : "--"}
+                  </span>
+                  <span className="code-data text-[var(--on-surface)]">
+                    {row.actualPaceStr ?? "--"}
+                  </span>
+                  <span className="code-data text-[var(--on-surface)]">
+                    {row.avgHr != null ? String(Math.round(row.avgHr)) : "--"}
+                  </span>
+                  <div className="flex items-center">
+                    <ComplySquare comply={row.comply} />
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="px-4 py-3">
+                <span className="code-data text-[var(--on-surface-variant)]">
+                  NO_SESSIONS — no workouts scheduled for this week
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -392,68 +446,6 @@ export default function TrainingPlanClient({
         </div>
       </div>
 
-      {/* ── PACE_CALC_V2 footer ───────────────────────────── */}
-      <div
-        className="flex items-center gap-6 px-4 flex-shrink-0"
-        style={{
-          height: 40,
-          backgroundColor: "var(--surface-container-low)",
-          borderTop: "1px solid var(--outline-variant)",
-        }}
-      >
-        <span className="label-caps flex-shrink-0" style={{ color: "var(--teal)" }}>
-          PACE_CALC_V2
-        </span>
-
-        <div className="flex items-center gap-2">
-          <span className="label-caps text-[var(--on-surface-variant)]">TARGET_TIME:</span>
-          <input
-            type="text"
-            value={targetTime}
-            onChange={(e) => setTargetTime(e.target.value)}
-            className="code-data text-[var(--teal)] bg-transparent outline-none w-24"
-            style={{
-              borderBottom: "1px solid var(--outline-variant)",
-              caretColor: "var(--teal)",
-            }}
-            placeholder="hh:mm:ss"
-            spellCheck={false}
-          />
-        </div>
-
-        <div className="flex items-center gap-6 ml-auto">
-          {paces && (
-            <>
-              <span className="label-caps text-[var(--on-surface-variant)]">
-                MP: <span className="text-[var(--on-surface)]">{paces.mp}</span>
-              </span>
-              <span className="label-caps text-[var(--on-surface-variant)]">
-                TEMPO: <span className="text-[var(--on-surface)]">{paces.tempo}</span>
-              </span>
-              <span className="label-caps text-[var(--on-surface-variant)]">
-                INT: <span className="text-[var(--amber)]">{paces.int}</span>
-              </span>
-              <span className="label-caps text-[var(--on-surface-variant)]">
-                EASY: <span className="text-[var(--on-surface)]">{paces.easy}</span>
-              </span>
-            </>
-          )}
-          <div
-            className="flex items-center gap-4 pl-4"
-            style={{ borderLeft: "1px solid var(--outline-variant)" }}
-          >
-            <span className="text-[9px] uppercase tracking-widest text-[var(--on-surface-variant)]">
-              PACE_CALCULATOR_V1.0
-            </span>
-            <span className="text-[9px] uppercase tracking-widest text-[var(--on-surface-variant)]">
-              LATENCY: 12MS
-            </span>
-            <span className="text-[9px] uppercase tracking-widest text-[var(--on-surface-variant)]">
-              CORE_TEMP: 36.5C
-            </span>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
