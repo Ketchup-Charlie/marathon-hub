@@ -22,7 +22,7 @@ export type Run = {
 /* ─── Constants ──────────────────────────────────────────── */
 
 const PAGE_SIZE = 20
-const COLS = "80px 1fr 90px 75px 75px 80px 70px 80px 85px 60px 110px"
+const COLS = "80px 1fr 90px 75px 75px 80px 70px 80px 85px 60px 160px"
 
 /* ─── Helpers ────────────────────────────────────────────── */
 
@@ -62,9 +62,15 @@ export default function RunLogClient({ runs: initialRuns }: { runs: Run[] }) {
   const [fromDate, setFromDate]     = useState("")
   const [toDate, setToDate]         = useState("")
   const [page, setPage]             = useState(0)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [deleting, setDeleting]     = useState(false)
+  const [deletingId, setDeletingId]   = useState<string | null>(null)
+  const [deleting, setDeleting]       = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  const [editingId, setEditingId]     = useState<string | null>(null)
+  const [editTitle, setEditTitle]     = useState("")
+  const [editRunType, setEditRunType] = useState("")
+  const [editSaving, setEditSaving]   = useState(false)
+  const [editError, setEditError]     = useState<string | null>(null)
 
   /* reset page on filter change */
   useEffect(() => { setPage(0) }, [filterType, fromDate, toDate])
@@ -96,6 +102,43 @@ export default function RunLogClient({ runs: initialRuns }: { runs: Run[] }) {
     setFilterType("All")
     setFromDate("")
     setToDate("")
+  }
+
+  /* ── Edit ───────────────────────────────────────────────── */
+
+  function startEdit(row: Run) {
+    setEditingId(row.id)
+    setEditTitle(row.title ?? "")
+    setEditRunType(row.run_type_tag ?? "")
+    setDeletingId(null)
+  }
+
+  async function handleSave(id: string) {
+    setEditSaving(true)
+    try {
+      const res = await fetch(`/api/runs/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: editTitle || null, run_type_tag: editRunType || null }),
+      })
+      if (!res.ok) {
+        const d = await res.json() as { error?: string }
+        setEditError(d.error ?? "SAVE_FAILED")
+        setTimeout(() => setEditError(null), 4000)
+        return
+      }
+      setRuns((prev) =>
+        prev.map((r) =>
+          r.id === id ? { ...r, title: editTitle || null, run_type_tag: editRunType || null } : r
+        )
+      )
+      setEditingId(null)
+    } catch {
+      setEditError("NETWORK_ERROR")
+      setTimeout(() => setEditError(null), 4000)
+    } finally {
+      setEditSaving(false)
+    }
   }
 
   /* ── Delete ─────────────────────────────────────────────── */
@@ -237,6 +280,19 @@ export default function RunLogClient({ runs: initialRuns }: { runs: Run[] }) {
         </div>
       )}
 
+      {/* Edit error banner */}
+      {editError && (
+        <div
+          className="px-4 py-2 flex-shrink-0"
+          style={{
+            borderBottom: "1px solid rgba(224,82,82,0.4)",
+            backgroundColor: "rgba(224,82,82,0.08)",
+          }}
+        >
+          <span className="label-caps" style={{ color: "#e05252" }}>ERR: {editError}</span>
+        </div>
+      )}
+
       {/* Table header */}
       <div
         className="grid flex-shrink-0 px-4 py-1.5"
@@ -264,115 +320,198 @@ export default function RunLogClient({ runs: initialRuns }: { runs: Run[] }) {
             </span>
           </div>
         ) : (
-          paged.map((row) => (
-            <div
-              key={row.id}
-              className="grid items-center px-4 py-2.5 cursor-pointer hover:bg-[var(--surface-container)]"
-              onClick={() => router.push(`/dashboard/run-analysis/${row.id}`)}
-              style={{
-                gridTemplateColumns: COLS,
-                borderBottom: "1px solid var(--outline-variant)",
-              }}
-            >
-              <span className="code-data text-[var(--on-surface-variant)]">{row.date}</span>
-
-              <span
-                className="code-data text-[var(--on-surface)] truncate pr-2"
-                title={row.title ?? ""}
-              >
-                {row.title ?? "--"}
-              </span>
-
-              <span className="code-data text-[var(--on-surface-variant)]">
-                {row.run_type_tag ?? "--"}
-              </span>
-
-              <span className="code-data text-[var(--on-surface)]">
-                {fmtDist(row.total_distance)}
-              </span>
-
-              <span className="code-data text-[var(--on-surface)]">
-                {row.total_time ?? "--"}
-              </span>
-
-              <span className="code-data text-[var(--on-surface)]">
-                {row.avg_pace ?? "--"}
-              </span>
-
-              <span className="code-data text-[var(--on-surface)]">
-                {row.avg_hr != null ? `${Math.round(row.avg_hr)}` : "--"}
-              </span>
-
-              <span className="code-data text-[var(--on-surface)]">
-                {fmtGct(row.avg_gct)}
-              </span>
-
-              <span className="code-data text-[var(--on-surface)]">
-                {row.avg_cadence != null ? `${row.avg_cadence}` : "--"}
-              </span>
-
-              <div className="flex items-center">
-                <ComplianceDot score={row.compliance_score} />
-              </div>
-
-              {/* ACTIONS — stop propagation so clicks don't navigate */}
+          paged.map((row) =>
+            editingId === row.id ? (
+              /* ── Inline edit row ──────────────────────────── */
               <div
-                className="flex items-center"
-                onClick={(e) => e.stopPropagation()}
+                key={row.id}
+                className="grid items-center px-4 py-2.5"
+                style={{
+                  gridTemplateColumns: COLS,
+                  borderBottom: "1px solid var(--outline-variant)",
+                  backgroundColor: "var(--surface-container)",
+                }}
               >
-                {deletingId === row.id ? (
-                  <div className="flex items-center gap-1">
-                    <span
-                      className="label-caps"
-                      style={{ color: "var(--amber)", fontSize: 10 }}
-                    >
-                      DEL?
-                    </span>
-                    <button
-                      onClick={() => void handleDelete(row.id)}
-                      disabled={deleting}
-                      className="label-caps"
-                      style={{
-                        fontSize: 10,
-                        padding: "2px 6px",
-                        backgroundColor: deleting ? "var(--surface-container-high)" : "#e05252",
-                        color: deleting ? "var(--on-surface-variant)" : "#fff",
-                        cursor: deleting ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      YES
-                    </button>
-                    <button
-                      onClick={() => setDeletingId(null)}
-                      disabled={deleting}
-                      className="label-caps"
-                      style={{
-                        fontSize: 10,
-                        padding: "2px 6px",
-                        border: "1px solid var(--outline-variant)",
-                        color: "var(--on-surface-variant)",
-                      }}
-                    >
-                      NO
-                    </button>
-                  </div>
-                ) : (
+                <span className="code-data text-[var(--on-surface-variant)]">{row.date}</span>
+
+                <input
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="code-data text-[var(--on-surface)] bg-transparent outline-none pr-2"
+                  style={{ borderBottom: "1px solid var(--teal)", caretColor: "var(--teal)" }}
+                  autoFocus
+                />
+
+                <input
+                  value={editRunType}
+                  onChange={(e) => setEditRunType(e.target.value)}
+                  className="code-data text-[var(--on-surface-variant)] bg-transparent outline-none"
+                  style={{ borderBottom: "1px solid var(--teal)", caretColor: "var(--teal)" }}
+                />
+
+                <span className="code-data text-[var(--on-surface)]">{fmtDist(row.total_distance)}</span>
+                <span className="code-data text-[var(--on-surface)]">{row.total_time ?? "--"}</span>
+                <span className="code-data text-[var(--on-surface)]">{row.avg_pace ?? "--"}</span>
+                <span className="code-data text-[var(--on-surface)]">{row.avg_hr != null ? `${Math.round(row.avg_hr)}` : "--"}</span>
+                <span className="code-data text-[var(--on-surface)]">{fmtGct(row.avg_gct)}</span>
+                <span className="code-data text-[var(--on-surface)]">{row.avg_cadence != null ? `${row.avg_cadence}` : "--"}</span>
+                <div className="flex items-center"><ComplianceDot score={row.compliance_score} /></div>
+
+                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                   <button
-                    onClick={() => setDeletingId(row.id)}
-                    className="label-caps hover:text-[#e05252] transition-colors"
+                    onClick={() => void handleSave(row.id)}
+                    disabled={editSaving}
+                    className="label-caps"
                     style={{
-                      fontSize: 11,
-                      padding: "3px 8px",
+                      fontSize: 10,
+                      padding: "2px 6px",
+                      backgroundColor: editSaving ? "var(--surface-container-high)" : "var(--teal)",
+                      color: editSaving ? "var(--on-surface-variant)" : "var(--on-teal)",
+                      cursor: editSaving ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    SAVE
+                  </button>
+                  <button
+                    onClick={() => setEditingId(null)}
+                    disabled={editSaving}
+                    className="label-caps"
+                    style={{
+                      fontSize: 10,
+                      padding: "2px 6px",
                       border: "1px solid var(--outline-variant)",
                       color: "var(--on-surface-variant)",
                     }}
                   >
-                    DELETE
+                    CANCEL
                   </button>
-                )}
+                </div>
               </div>
-            </div>
-          ))
+            ) : (
+              /* ── Normal row ───────────────────────────────── */
+              <div
+                key={row.id}
+                className="grid items-center px-4 py-2.5 cursor-pointer hover:bg-[var(--surface-container)]"
+                onClick={() => router.push(`/dashboard/run-analysis/${row.id}`)}
+                style={{
+                  gridTemplateColumns: COLS,
+                  borderBottom: "1px solid var(--outline-variant)",
+                }}
+              >
+                <span className="code-data text-[var(--on-surface-variant)]">{row.date}</span>
+
+                <span
+                  className="code-data text-[var(--on-surface)] truncate pr-2"
+                  title={row.title ?? ""}
+                >
+                  {row.title ?? "--"}
+                </span>
+
+                <span className="code-data text-[var(--on-surface-variant)]">
+                  {row.run_type_tag ?? "--"}
+                </span>
+
+                <span className="code-data text-[var(--on-surface)]">
+                  {fmtDist(row.total_distance)}
+                </span>
+
+                <span className="code-data text-[var(--on-surface)]">
+                  {row.total_time ?? "--"}
+                </span>
+
+                <span className="code-data text-[var(--on-surface)]">
+                  {row.avg_pace ?? "--"}
+                </span>
+
+                <span className="code-data text-[var(--on-surface)]">
+                  {row.avg_hr != null ? `${Math.round(row.avg_hr)}` : "--"}
+                </span>
+
+                <span className="code-data text-[var(--on-surface)]">
+                  {fmtGct(row.avg_gct)}
+                </span>
+
+                <span className="code-data text-[var(--on-surface)]">
+                  {row.avg_cadence != null ? `${row.avg_cadence}` : "--"}
+                </span>
+
+                <div className="flex items-center">
+                  <ComplianceDot score={row.compliance_score} />
+                </div>
+
+                {/* ACTIONS — stop propagation so clicks don't navigate */}
+                <div
+                  className="flex items-center gap-1"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {deletingId === row.id ? (
+                    <div className="flex items-center gap-1">
+                      <span
+                        className="label-caps"
+                        style={{ color: "var(--amber)", fontSize: 10 }}
+                      >
+                        DEL?
+                      </span>
+                      <button
+                        onClick={() => void handleDelete(row.id)}
+                        disabled={deleting}
+                        className="label-caps"
+                        style={{
+                          fontSize: 10,
+                          padding: "2px 6px",
+                          backgroundColor: deleting ? "var(--surface-container-high)" : "#e05252",
+                          color: deleting ? "var(--on-surface-variant)" : "#fff",
+                          cursor: deleting ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        YES
+                      </button>
+                      <button
+                        onClick={() => setDeletingId(null)}
+                        disabled={deleting}
+                        className="label-caps"
+                        style={{
+                          fontSize: 10,
+                          padding: "2px 6px",
+                          border: "1px solid var(--outline-variant)",
+                          color: "var(--on-surface-variant)",
+                        }}
+                      >
+                        NO
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => startEdit(row)}
+                        className="label-caps hover:text-[var(--teal)] transition-colors"
+                        style={{
+                          fontSize: 11,
+                          padding: "3px 8px",
+                          border: "1px solid var(--outline-variant)",
+                          color: "var(--on-surface-variant)",
+                        }}
+                      >
+                        EDIT
+                      </button>
+                      <button
+                        onClick={() => setDeletingId(row.id)}
+                        className="label-caps hover:text-[#e05252] transition-colors"
+                        style={{
+                          fontSize: 11,
+                          padding: "3px 8px",
+                          border: "1px solid var(--outline-variant)",
+                          color: "var(--on-surface-variant)",
+                        }}
+                      >
+                        DELETE
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )
+          )
         )}
       </div>
 

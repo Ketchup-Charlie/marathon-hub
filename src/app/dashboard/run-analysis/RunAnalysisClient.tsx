@@ -275,6 +275,9 @@ export default function RunAnalysisClient({
     ? (v: number) => `${Math.floor(v)}m`
     : (v: number) => `${v.toFixed(1)}k`
 
+  // Minimal right margin—axes handle their own spacing via width property
+  const chartMarginRight = 4
+
   /* ── Lap table ──────────────────────────────────────────── */
 
   const intentSet = new Set(laps.map((l) => l.lap_intent ?? "Run"))
@@ -375,7 +378,7 @@ export default function RunAnalysisClient({
             style={{ borderBottom: "1px solid var(--outline-variant)" }}
           >
             {/* Header row: section label + legend toggles */}
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-4">
               <span className="label-caps text-[var(--on-surface-variant)]">TIME_SERIES_ANALYSIS</span>
               <div className="flex items-center gap-2">
                 <span
@@ -413,7 +416,7 @@ export default function RunAnalysisClient({
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
                     data={chartData}
-                    margin={{ top: 4, right: showElev ? 84 : 48, left: 48, bottom: 0 }}
+                    margin={{ top: 4, right: chartMarginRight, left: 48, bottom: 0 }}
                   >
                     <CartesianGrid
                       stroke="var(--surface-container-high)"
@@ -449,51 +452,54 @@ export default function RunAnalysisClient({
                       }}
                       width={38}
                     />
-                    {/* HR axis — right */}
-                    <YAxis
-                      yAxisId="hr"
-                      orientation="right"
-                      domain={["auto", "auto"]}
-                      hide={!showHR}
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{
-                        fill: "var(--amber)",
-                        fontSize: 9,
-                        fontFamily: "var(--font-space-grotesk)",
-                      }}
-                      width={38}
-                    />
-                    {/* Cadence axis */}
-                    <YAxis
-                      yAxisId="cad"
-                      orientation="right"
-                      domain={[120, 200]}
-                      hide={!showCad}
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{
-                        fill: "#c084fc",
-                        fontSize: 9,
-                        fontFamily: "var(--font-space-grotesk)",
-                      }}
-                      width={35}
-                    />
-                    {/* Elevation axis — right, further out */}
-                    <YAxis
-                      yAxisId="elev"
-                      orientation="right"
-                      domain={["auto", "auto"]}
-                      hide={!showElev}
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{
-                        fill: "#6b7280",
-                        fontSize: 9,
-                        fontFamily: "var(--font-space-grotesk)",
-                      }}
-                      width={38}
-                    />
+                    {/* HR axis — right, 1st column */}
+                    {showHR && (
+                      <YAxis
+                        yAxisId="hr"
+                        orientation="right"
+                        domain={["auto", "auto"]}
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{
+                          fill: "var(--amber)",
+                          fontSize: 9,
+                          fontFamily: "var(--font-space-grotesk)",
+                        }}
+                        width={50}
+                      />
+                    )}
+                    {/* Cadence axis — right, 2nd column */}
+                    {showCad && (
+                      <YAxis
+                        yAxisId="cad"
+                        orientation="right"
+                        domain={[120, 200]}
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{
+                          fill: "#c084fc",
+                          fontSize: 9,
+                          fontFamily: "var(--font-space-grotesk)",
+                        }}
+                        width={50}
+                      />
+                    )}
+                    {/* Elevation axis — right, 3rd column */}
+                    {showElev && (
+                      <YAxis
+                        yAxisId="elev"
+                        orientation="right"
+                        domain={["auto", "auto"]}
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{
+                          fill: "#6b7280",
+                          fontSize: 9,
+                          fontFamily: "var(--font-space-grotesk)",
+                        }}
+                        width={50}
+                      />
+                    )}
                     <Tooltip
                       content={
                         (props) => (
@@ -583,7 +589,7 @@ export default function RunAnalysisClient({
 
           {/* LAP_TABLE */}
           {showLapTable && (
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0" style={{ marginTop: 16 }}>
               <div
                 className="flex items-center justify-between px-4 py-2"
                 style={{ borderBottom: "1px solid var(--outline-variant)" }}
@@ -734,7 +740,7 @@ export default function RunAnalysisClient({
 
           {/* BIOMECHANICS_TELEMETRY */}
           <div
-            className="flex flex-col p-4 flex-shrink-0"
+            className="flex flex-col p-3 flex-shrink-0"
             style={{ borderBottom: "1px solid var(--outline-variant)" }}
           >
             <span className="label-caps text-[var(--on-surface-variant)] mb-4">
@@ -819,7 +825,7 @@ export default function RunAnalysisClient({
           </div>
 
           {/* SYSTEM_CRITIQUE */}
-          <div className="flex flex-col p-4">
+          <div className="flex flex-col p-3">
             <span className="label-caps text-[var(--on-surface-variant)] mb-3">SYSTEM_CRITIQUE</span>
             <div className="flex flex-col gap-2">
               {flags.map((flag, i) => (

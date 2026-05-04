@@ -144,10 +144,10 @@ export default function SettingsClient({
           >
             {/* Text fields */}
             {[
-              { key: "race_name",   label: "RACE_NAME",   placeholder: "Sydney Marathon 2026", teal: false },
-              { key: "race_date",   label: "RACE_DATE",   placeholder: "YYYY-MM-DD",           teal: false },
-              { key: "target_time", label: "TARGET_TIME", placeholder: "h:mm:ss",              teal: true  },
-            ].map(({ key, label, placeholder, teal }) => (
+              { key: "race_name",   label: "RACE_NAME",   placeholder: "Sydney Marathon 2026", teal: false, isDate: false },
+              { key: "race_date",   label: "RACE_DATE",   placeholder: "",                      teal: false, isDate: true  },
+              { key: "target_time", label: "TARGET_TIME", placeholder: "h:mm:ss",              teal: true,  isDate: false },
+            ].map(({ key, label, placeholder, teal, isDate }) => (
               <React.Fragment key={key}>
                 <div
                   className="flex items-center px-4 py-2.5 label-caps text-[var(--on-surface-variant)]"
@@ -159,16 +159,32 @@ export default function SettingsClient({
                   className="flex items-center px-4 py-2"
                   style={{ backgroundColor: "var(--surface)" }}
                 >
-                  <input
-                    type="text"
-                    value={form[key as keyof typeof form] as string}
-                    onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                    onBlur={key === "target_time" ? () => recalculate(form.target_time) : undefined}
-                    className={`code-data bg-transparent outline-none w-full ${teal ? "text-[var(--teal)]" : "text-[var(--on-surface)]"}`}
-                    style={{ borderBottom: "1px solid var(--outline-variant)", caretColor: "var(--teal)" }}
-                    placeholder={placeholder}
-                    spellCheck={false}
-                  />
+                  {isDate ? (
+                    <input
+                      type="date"
+                      value={form[key as keyof typeof form] as string}
+                      onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                      className="code-data text-[var(--on-surface)] bg-transparent outline-none"
+                      style={{
+                        border: "1px solid var(--outline-variant)",
+                        borderRadius: 0,
+                        colorScheme: "dark",
+                        caretColor: "var(--teal)",
+                        padding: "2px 6px",
+                      }}
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={form[key as keyof typeof form] as string}
+                      onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                      onBlur={key === "target_time" ? () => recalculate(form.target_time) : undefined}
+                      className={`code-data bg-transparent outline-none w-full ${teal ? "text-[var(--teal)]" : "text-[var(--on-surface)]"}`}
+                      style={{ borderBottom: "1px solid var(--outline-variant)", caretColor: "var(--teal)" }}
+                      placeholder={placeholder}
+                      spellCheck={false}
+                    />
+                  )}
                 </div>
               </React.Fragment>
             ))}
