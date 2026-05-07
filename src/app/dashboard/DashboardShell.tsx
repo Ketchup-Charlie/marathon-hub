@@ -16,6 +16,7 @@ import {
   Bell,
   Settings,
   Upload,
+  BarChart2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { calcPaces } from "@/lib/pace"
@@ -26,6 +27,7 @@ const PRIMARY_NAV = [
   { label: "DASHBOARD",       href: "/dashboard",                 icon: LayoutDashboard },
   { label: "TRAINING_BLOCKS", href: "/dashboard/training-blocks", icon: CalendarDays    },
   { label: "RUN_ANALYSIS",    href: "/dashboard/run-analysis",    icon: TrendingUp      },
+  { label: "PROGRESSION",    href: "/dashboard/progression",     icon: BarChart2       },
   { label: "BIOMETRIC_LOG",   href: "/dashboard/biometric-log",   icon: Activity        },
   { label: "GEAR_LAB",        href: "/dashboard/gear-lab",        icon: Package         },
   { label: "RECOVERY_SCORE",  href: "/dashboard/recovery-score",  icon: Zap             },

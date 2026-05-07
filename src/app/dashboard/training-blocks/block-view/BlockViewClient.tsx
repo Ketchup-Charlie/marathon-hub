@@ -152,12 +152,14 @@ export default function BlockViewClient({
 }) {
   const startDate = useMemo(() => parseLocalDate(block.start_date), [block.start_date])
 
-  const [workouts, setWorkouts]     = useState<Workout[]>(initialWorkouts)
-  const [weekPhases, setWeekPhases] = useState<Record<string, string>>(block.week_phases)
-  const [modal, setModal]           = useState<ModalState>({ open: false, date: '', weekNum: 1, existing: null })
-  const [form, setForm]             = useState<FormState>(EMPTY_FORM)
-  const [saving, setSaving]         = useState(false)
-  const [saveError, setSaveError]   = useState<string | null>(null)
+  const [workouts, setWorkouts]         = useState<Workout[]>(initialWorkouts)
+  const [weekPhases, setWeekPhases]     = useState<Record<string, string>>(block.week_phases)
+  const [modal, setModal]               = useState<ModalState>({ open: false, date: '', weekNum: 1, existing: null })
+  const [form, setForm]                 = useState<FormState>(EMPTY_FORM)
+  const [saving, setSaving]             = useState(false)
+  const [saveError, setSaveError]       = useState<string | null>(null)
+  const [showCustomType, setShowCustomType] = useState(false)
+  const [customTypeText, setCustomTypeText] = useState('')
 
   const workoutsByDate = useMemo(() => {
     const map = new Map<string, Workout>()
@@ -195,6 +197,9 @@ export default function BlockViewClient({
     const existing     = workoutsByDate.get(date) ?? null
     const currentPhase = weekPhases[String(weekNum)] ?? getPhase(weekNum, block.total_weeks)
     setModal({ open: true, date, weekNum, existing })
+    const isCustom = !!existing && !WORKOUT_TYPES.includes(existing.workout_type)
+    setShowCustomType(isCustom)
+    setCustomTypeText(isCustom ? existing.workout_type : '')
     setForm(
       existing
         ? {
@@ -213,6 +218,8 @@ export default function BlockViewClient({
 
   function closeModal() {
     setModal(m => ({ ...m, open: false }))
+    setShowCustomType(false)
+    setCustomTypeText('')
   }
 
   async function handleSave() {
@@ -531,8 +538,18 @@ export default function BlockViewClient({
               <label className="flex flex-col gap-1">
                 <span className="label-caps text-[var(--on-surface-variant)]">WORKOUT_TYPE</span>
                 <select
-                  value={form.workout_type}
-                  onChange={e => setForm(f => ({ ...f, workout_type: e.target.value }))}
+                  value={showCustomType ? '__CUSTOM__' : form.workout_type}
+                  onChange={e => {
+                    if (e.target.value === '__CUSTOM__') {
+                      setShowCustomType(true)
+                      setCustomTypeText('')
+                      setForm(f => ({ ...f, workout_type: '' }))
+                    } else {
+                      setShowCustomType(false)
+                      setCustomTypeText('')
+                      setForm(f => ({ ...f, workout_type: e.target.value }))
+                    }
+                  }}
                   className="code-data px-2 py-1.5"
                   style={{
                     backgroundColor: 'var(--surface-container-high)',
@@ -542,7 +559,26 @@ export default function BlockViewClient({
                   }}
                 >
                   {WORKOUT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  <option value="__CUSTOM__">+ Custom type...</option>
                 </select>
+                {showCustomType && (
+                  <input
+                    type="text"
+                    value={customTypeText}
+                    onChange={e => {
+                      setCustomTypeText(e.target.value)
+                      setForm(f => ({ ...f, workout_type: e.target.value }))
+                    }}
+                    placeholder="Enter custom type..."
+                    autoFocus
+                    className="code-data text-[var(--on-surface)] bg-transparent px-2 py-1 mt-1"
+                    style={{
+                      border:      '1px solid var(--teal)',
+                      outline:     'none',
+                      caretColor:  'var(--teal)',
+                    }}
+                  />
+                )}
               </label>
 
               {/* target_distance_km */}

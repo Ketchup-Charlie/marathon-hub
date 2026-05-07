@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useRef, useCallback } from "react"
+import React, { useState, useRef, useCallback, useEffect } from "react"
 import Link from "next/link"
 
 /* ─── Types ─────────────────────────────────────────────── */
@@ -33,6 +33,19 @@ type ParsedRun = {
 }
 
 type Stage = "idle" | "parsing" | "parsed" | "uploading" | "success" | "error"
+
+/* ─── Constants ──────────────────────────────────────────── */
+
+const FALLBACK_TYPES = ["Easy", "Long", "Tempo", "Interval", "Race", "Trail Run", "Recovery"]
+
+/* ─── Helpers ────────────────────────────────────────────── */
+
+function autoSelectType(title: string, options: string[]): string {
+  const t = title.toLowerCase()
+  if (t.includes("trail"))    return options.includes("Trail Run") ? "Trail Run" : options[0] ?? "Easy"
+  if (t.includes("interval")) return options.includes("Interval")  ? "Interval"  : options[0] ?? "Easy"
+  return options.includes("Easy") ? "Easy" : options[0] ?? ""
+}
 
 /* ─── Section header ─────────────────────────────────────── */
 
@@ -74,20 +87,32 @@ function SummaryRow({ label, value }: { label: string; value: React.ReactNode })
 /* ─── Main component ─────────────────────────────────────── */
 
 export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
-  const [stage, setStage]         = useState<Stage>("idle")
-  const [file, setFile]           = useState<File | null>(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const [isHovering, setIsHovering] = useState(false)
-  const [parsed, setParsed]       = useState<ParsedRun | null>(null)
+  const [stage, setStage]             = useState<Stage>("idle")
+  const [file, setFile]               = useState<File | null>(null)
+  const [isDragging, setIsDragging]   = useState(false)
+  const [isHovering, setIsHovering]   = useState(false)
+  const [parsed, setParsed]           = useState<ParsedRun | null>(null)
   const [editedTitle, setEditedTitle] = useState("")
-  const [runTypeTag, setRunTypeTag] = useState("")
-  const [shoeId, setShoeId]       = useState("")
-  const [notes, setNotes]         = useState("")
+  const [workoutType, setWorkoutType] = useState("")
+  const [shoeId, setShoeId]           = useState("")
+  const [notes, setNotes]             = useState("")
   const [resultRunId, setResultRunId] = useState<string | null>(null)
-  const [errorMsg, setErrorMsg]   = useState<string | null>(null)
+  const [errorMsg, setErrorMsg]       = useState<string | null>(null)
+  const [typeOptions, setTypeOptions] = useState<string[]>(FALLBACK_TYPES)
 
-  const fileInputRef  = useRef<HTMLInputElement>(null)
-  const dragCounter   = useRef(0)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const dragCounter  = useRef(0)
+
+  /* ── Fetch workout types ────────────────────────────────── */
+
+  useEffect(() => {
+    fetch("/api/workout-types")
+      .then((r) => r.json())
+      .then((d: { types?: string[] }) => {
+        if (Array.isArray(d.types) && d.types.length > 0) setTypeOptions(d.types)
+      })
+      .catch(() => {/* keep fallback */})
+  }, [])
 
   /* ── File handling ──────────────────────────────────────── */
 
@@ -129,7 +154,7 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
     try {
       const fd = new FormData()
       fd.append("file", file)
-      const res = await fetch("/api/parse-fit", { method: "POST", body: fd })
+      const res  = await fetch("/api/parse-fit", { method: "POST", body: fd })
       const data = await res.json() as Record<string, unknown>
       if (!res.ok || data.error) {
         setErrorMsg(String(data.error ?? "PARSE_FAILED"))
@@ -139,7 +164,7 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
       const run = data as ParsedRun
       setParsed(run)
       setEditedTitle(run.title ?? "")
-      setRunTypeTag(run.title ?? "")
+      setWorkoutType(autoSelectType(run.title ?? "", typeOptions))
       setStage("parsed")
     } catch {
       setErrorMsg("NETWORK_ERROR")
@@ -160,7 +185,7 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
         body: JSON.stringify({
           parsedRun:    parsed,
           title:        editedTitle || null,
-          run_type_tag: runTypeTag || null,
+          run_type_tag: workoutType || null,
           shoe_id:      shoeId     || null,
           notes:        notes      || null,
         }),
@@ -186,7 +211,7 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
     setFile(null)
     setParsed(null)
     setEditedTitle("")
-    setRunTypeTag("")
+    setWorkoutType("")
     setShoeId("")
     setNotes("")
     setErrorMsg(null)
@@ -212,6 +237,7 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
 
   const dropActive = isDragging || isHovering
   const hasParsed  = parsed !== null && (stage === "parsed" || stage === "uploading" || stage === "success" || stage === "error")
+  const disabled   = stage === "uploading" || stage === "success"
 
   /* ── Render ─────────────────────────────────────────────── */
 
@@ -244,7 +270,6 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
           <SectionHeader label="01_FILE_SELECT" />
 
           <div className="p-4 flex flex-col gap-3">
-            {/* Drop zone */}
             <div
               role="button"
               tabIndex={0}
@@ -267,9 +292,7 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
             >
               {file ? (
                 <div className="flex flex-col items-center gap-1">
-                  <span className="code-data" style={{ color: "var(--teal)" }}>
-                    {file.name}
-                  </span>
+                  <span className="code-data" style={{ color: "var(--teal)" }}>{file.name}</span>
                   <span className="label-caps text-[var(--on-surface-variant)]">
                     {(file.size / 1024).toFixed(1)} KB
                   </span>
@@ -300,7 +323,6 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
               }}
             />
 
-            {/* Actions */}
             <div className="flex items-center gap-3">
               <button
                 onClick={() => void handleParse()}
@@ -331,17 +353,14 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
           </div>
         </div>
 
-        {/* ── 02 ACTIVITY_SUMMARY (after parse) ──────────── */}
+        {/* ── 02 ACTIVITY_SUMMARY ─────────────────────────── */}
         {hasParsed && parsed && (
           <div style={{ borderBottom: "1px solid var(--outline-variant)" }}>
             <SectionHeader label="02_ACTIVITY_SUMMARY" />
 
             <div
               className="grid gap-px"
-              style={{
-                gridTemplateColumns: "140px 1fr",
-                backgroundColor: "var(--outline-variant)",
-              }}
+              style={{ gridTemplateColumns: "140px 1fr", backgroundColor: "var(--outline-variant)" }}
             >
               {/* TITLE — editable */}
               <div
@@ -350,20 +369,14 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
               >
                 TITLE
               </div>
-              <div
-                className="flex items-center px-4 py-2"
-                style={{ backgroundColor: "var(--surface)" }}
-              >
+              <div className="flex items-center px-4 py-2" style={{ backgroundColor: "var(--surface)" }}>
                 <input
                   type="text"
                   value={editedTitle}
                   onChange={(e) => setEditedTitle(e.target.value)}
-                  disabled={stage === "uploading" || stage === "success"}
+                  disabled={disabled}
                   className="code-data text-[var(--on-surface)] bg-transparent outline-none w-full"
-                  style={{
-                    borderBottom: "1px solid var(--outline-variant)",
-                    caretColor: "var(--teal)",
-                  }}
+                  style={{ borderBottom: "1px solid var(--outline-variant)", caretColor: "var(--teal)" }}
                   spellCheck={false}
                 />
               </div>
@@ -399,9 +412,7 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
                   }}
                 >
                   {["LAP", "INTENT", "DIST", "TIME", "PACE", "AVG_HR"].map((col) => (
-                    <span key={col} className="label-caps text-[var(--on-surface-variant)]">
-                      {col}
-                    </span>
+                    <span key={col} className="label-caps text-[var(--on-surface-variant)]">{col}</span>
                   ))}
                 </div>
                 {parsed.laps.map((lap) => (
@@ -413,24 +424,14 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
                       borderBottom: "1px solid var(--outline-variant)",
                     }}
                   >
-                    <span className="code-data text-[var(--on-surface-variant)]">
-                      {lap.lap_number}
-                    </span>
-                    <span className="code-data" style={{ color: "var(--teal)" }}>
-                      {lap.lap_intent}
-                    </span>
+                    <span className="code-data text-[var(--on-surface-variant)]">{lap.lap_number}</span>
+                    <span className="code-data" style={{ color: "var(--teal)" }}>{lap.lap_intent}</span>
                     <span className="code-data text-[var(--on-surface)]">
                       {lap.distance != null ? `${lap.distance.toFixed(2)}k` : "--"}
                     </span>
-                    <span className="code-data text-[var(--on-surface)]">
-                      {lap.time ?? "--"}
-                    </span>
-                    <span className="code-data text-[var(--on-surface)]">
-                      {lap.avg_pace ?? "--"}
-                    </span>
-                    <span className="code-data text-[var(--on-surface)]">
-                      {lap.avg_hr ?? "--"}
-                    </span>
+                    <span className="code-data text-[var(--on-surface)]">{lap.time ?? "--"}</span>
+                    <span className="code-data text-[var(--on-surface)]">{lap.avg_pace ?? "--"}</span>
+                    <span className="code-data text-[var(--on-surface)]">{lap.avg_hr ?? "--"}</span>
                   </div>
                 ))}
               </div>
@@ -438,42 +439,39 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
           </div>
         )}
 
-        {/* ── 03 METADATA ────────────────────────────────── */}
+        {/* ── 03 METADATA ─────────────────────────────────── */}
         {hasParsed && (
           <div style={{ borderBottom: "1px solid var(--outline-variant)" }}>
             <SectionHeader label="03_METADATA" />
 
             <div
               className="grid gap-px"
-              style={{
-                gridTemplateColumns: "140px 1fr",
-                backgroundColor: "var(--outline-variant)",
-              }}
+              style={{ gridTemplateColumns: "140px 1fr", backgroundColor: "var(--outline-variant)" }}
             >
-              {/* RUN_TYPE_TAG */}
+              {/* WORKOUT_TYPE — dropdown */}
               <div
                 className="flex items-center px-4 py-2 label-caps text-[var(--on-surface-variant)]"
                 style={{ backgroundColor: "var(--surface-container-low)" }}
               >
-                RUN_TYPE_TAG
+                WORKOUT_TYPE
               </div>
-              <div
-                className="flex items-center px-4 py-2"
-                style={{ backgroundColor: "var(--surface)" }}
-              >
-                <input
-                  type="text"
-                  value={runTypeTag}
-                  onChange={(e) => setRunTypeTag(e.target.value)}
-                  disabled={stage === "uploading" || stage === "success"}
-                  className="code-data text-[var(--on-surface)] bg-transparent outline-none w-full"
+              <div className="flex items-center px-4 py-2" style={{ backgroundColor: "var(--surface)" }}>
+                <select
+                  value={workoutType}
+                  onChange={(e) => setWorkoutType(e.target.value)}
+                  disabled={disabled}
+                  className="code-data text-[var(--on-surface)] outline-none w-full"
                   style={{
+                    backgroundColor: "var(--surface)",
+                    border: "none",
                     borderBottom: "1px solid var(--outline-variant)",
                     caretColor: "var(--teal)",
                   }}
-                  placeholder="e.g. Easy Run, Long Run, Tempo"
-                  spellCheck={false}
-                />
+                >
+                  {typeOptions.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
               </div>
 
               {/* SHOE_ID */}
@@ -483,22 +481,16 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
               >
                 SHOE_ID
               </div>
-              <div
-                className="flex items-center px-4 py-2"
-                style={{ backgroundColor: "var(--surface)" }}
-              >
+              <div className="flex items-center px-4 py-2" style={{ backgroundColor: "var(--surface)" }}>
                 {shoes.length === 0 ? (
-                  <span
-                    className="code-data text-[var(--on-surface-variant)]"
-                    style={{ opacity: 0.5 }}
-                  >
+                  <span className="code-data text-[var(--on-surface-variant)]" style={{ opacity: 0.5 }}>
                     No shoes configured — add in Gear Lab
                   </span>
                 ) : (
                   <select
                     value={shoeId}
                     onChange={(e) => setShoeId(e.target.value)}
-                    disabled={stage === "uploading" || stage === "success"}
+                    disabled={disabled}
                     className="code-data text-[var(--on-surface)] outline-none w-full"
                     style={{
                       backgroundColor: "var(--surface)",
@@ -524,14 +516,11 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
               >
                 NOTES
               </div>
-              <div
-                className="flex items-start px-4 py-2"
-                style={{ backgroundColor: "var(--surface)" }}
-              >
+              <div className="flex items-start px-4 py-2" style={{ backgroundColor: "var(--surface)" }}>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  disabled={stage === "uploading" || stage === "success"}
+                  disabled={disabled}
                   rows={3}
                   className="code-data text-[var(--on-surface)] bg-transparent outline-none w-full resize-none"
                   style={{
@@ -580,7 +569,6 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
               </div>
             )}
 
-            {/* Success banner */}
             {stage === "success" && resultRunId && (
               <div
                 className="flex items-center justify-between px-4 py-3"
@@ -613,7 +601,6 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
               </div>
             )}
 
-            {/* Error banner */}
             {stage === "error" && errorMsg && (
               <div
                 className="px-4 py-3"
