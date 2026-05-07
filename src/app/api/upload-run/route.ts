@@ -85,5 +85,30 @@ export async function POST(req: NextRequest) {
       .eq('id', result.run_id)
   }
 
+  if (shoe_id) {
+    const { data: uploadedRun } = await supabase
+      .from('completed_runs')
+      .select('total_distance')
+      .eq('id', result.run_id)
+      .single()
+
+    if (uploadedRun?.total_distance) {
+      const { data: shoe } = await supabase
+        .from('shoes')
+        .select('current_mileage')
+        .eq('id', shoe_id)
+        .eq('user_id', user.id)
+        .single()
+
+      if (shoe) {
+        await supabase
+          .from('shoes')
+          .update({ current_mileage: shoe.current_mileage + uploadedRun.total_distance })
+          .eq('id', shoe_id)
+          .eq('user_id', user.id)
+      }
+    }
+  }
+
   return Response.json({ run_id: result.run_id })
 }

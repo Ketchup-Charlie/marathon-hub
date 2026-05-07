@@ -14,10 +14,10 @@ export default async function RunDetailPage({
 
   if (!user) redirect('/dashboard/run-analysis')
 
-  const [runResult, lapsResult, tsResult] = await Promise.all([
+  const [runResult, lapsResult, tsResult, shoesResult] = await Promise.all([
     supabase
       .from('completed_runs')
-      .select('id, date, title, run_type_tag, total_distance, total_time, avg_pace, avg_hr, max_hr, avg_cadence, avg_gct, avg_vertical_oscillation, notes')
+      .select('id, date, title, run_type_tag, shoe_id, total_distance, total_time, avg_pace, avg_hr, max_hr, avg_cadence, avg_gct, avg_vertical_oscillation, notes')
       .eq('id', run_id)
       .eq('user_id', user.id)
       .maybeSingle(),
@@ -31,6 +31,11 @@ export default async function RunDetailPage({
       .select('seconds_elapsed, distance_km, pace_sec_per_km, hr, cadence, elevation_m')
       .eq('run_id', run_id)
       .order('seconds_elapsed'),
+    supabase
+      .from('shoes')
+      .select('id, brand, model, active_status')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false }),
   ])
 
   if (runResult.error) console.error('[run-detail]', runResult.error.message)
@@ -41,6 +46,7 @@ export default async function RunDetailPage({
       run={runResult.data}
       laps={lapsResult.data ?? []}
       timeseries={tsResult.data ?? []}
+      shoes={shoesResult.data ?? []}
     />
   )
 }

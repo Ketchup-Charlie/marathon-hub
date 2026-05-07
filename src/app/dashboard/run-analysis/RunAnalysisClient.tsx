@@ -20,6 +20,7 @@ export type RunDetail = {
   date: string
   title: string | null
   run_type_tag: string | null
+  shoe_id: string | null
   total_distance: number | null
   total_time: string | null
   avg_pace: string | null
@@ -29,6 +30,13 @@ export type RunDetail = {
   avg_gct: number | null
   avg_vertical_oscillation: number | null
   notes: string | null
+}
+
+export type Shoe = {
+  id: string
+  brand: string
+  model: string
+  active_status: boolean
 }
 
 export type Lap = {
@@ -220,16 +228,162 @@ function LapFilterBtn({
   )
 }
 
+/* ─── Shoe icon ──────────────────────────────────────────── */
+
+function ShoeIcon() {
+  return (
+    <svg width="16" height="10" viewBox="0 0 32 20" fill="none" style={{ flexShrink: 0 }}>
+      <path
+        d="M2 14 Q6 8 12 8 L22 8 Q28 8 30 12 L30 15 Q26 17 18 17 L4 17 Q1 17 2 14Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path d="M12 8 L14 4 L18 4 L16 8" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="8" y1="13" x2="8" y2="17" stroke="currentColor" strokeWidth="1" opacity="0.5" />
+      <line x1="13" y1="11" x2="13" y2="17" stroke="currentColor" strokeWidth="1" opacity="0.5" />
+      <line x1="18" y1="11" x2="18" y2="17" stroke="currentColor" strokeWidth="1" opacity="0.5" />
+    </svg>
+  )
+}
+
+/* ─── Shoe strip ─────────────────────────────────────────── */
+
+function ShoeStrip({ runId, shoes, initialShoeId }: {
+  runId: string
+  shoes: Shoe[]
+  initialShoeId: string | null
+}) {
+  const [currentShoeId, setCurrentShoeId] = useState<string | null>(initialShoeId)
+  const [editing, setEditing]             = useState(false)
+  const [pendingId, setPendingId]         = useState<string | null>(initialShoeId)
+  const [saving, setSaving]               = useState(false)
+
+  const currentShoe  = shoes.find((s) => s.id === currentShoeId) ?? null
+  const activeShoes  = shoes.filter((s) => s.active_status)
+
+  async function save() {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/runs/${runId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shoe_id: pendingId }),
+      })
+      if (!res.ok) throw new Error("save failed")
+      setCurrentShoeId(pendingId)
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div
+      className="flex items-center gap-3 px-6 flex-shrink-0"
+      style={{
+        height: 36,
+        borderBottom: "1px solid var(--outline-variant)",
+        backgroundColor: "var(--surface-container-low)",
+      }}
+    >
+      <span className="label-caps text-[var(--on-surface-variant)]">SHOE</span>
+      <span className="label-caps text-[var(--on-surface-variant)]">::</span>
+
+      {editing ? (
+        <>
+          <div style={{ color: "var(--on-surface-variant)" }}><ShoeIcon /></div>
+          <select
+            value={pendingId ?? ""}
+            onChange={(e) => setPendingId(e.target.value || null)}
+            className="label-caps"
+            style={{
+              backgroundColor: "var(--surface-container-high)",
+              border: "1px solid var(--outline-variant)",
+              color: "var(--on-surface)",
+              padding: "1px 6px",
+              fontSize: 9,
+              outline: "none",
+            }}
+          >
+            <option value="">-- NONE --</option>
+            {activeShoes.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.brand.toUpperCase()} {s.model.toUpperCase()}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="label-caps"
+            style={{
+              padding: "2px 8px",
+              border: "1px solid var(--teal)",
+              color: "var(--teal)",
+              fontSize: 9,
+              opacity: saving ? 0.5 : 1,
+            }}
+          >
+            {saving ? "SAVING…" : "SAVE"}
+          </button>
+          <button
+            onClick={() => { setEditing(false); setPendingId(currentShoeId) }}
+            className="label-caps"
+            style={{
+              padding: "2px 8px",
+              border: "1px solid var(--outline-variant)",
+              color: "var(--on-surface-variant)",
+              fontSize: 9,
+            }}
+          >
+            CANCEL
+          </button>
+        </>
+      ) : (
+        <>
+          <div style={{ color: currentShoe ? "var(--teal)" : "var(--on-surface-variant)" }}>
+            <ShoeIcon />
+          </div>
+          <span
+            className="label-caps"
+            style={{ color: currentShoe ? "var(--teal)" : "var(--on-surface-variant)" }}
+          >
+            {currentShoe
+              ? `${currentShoe.brand.toUpperCase()} ${currentShoe.model.toUpperCase()}`
+              : "NO_SHOE_ASSIGNED"}
+          </span>
+          <button
+            onClick={() => { setPendingId(currentShoeId); setEditing(true) }}
+            className="label-caps"
+            style={{
+              marginLeft: "auto",
+              padding: "2px 8px",
+              border: "1px solid var(--outline-variant)",
+              color: "var(--on-surface-variant)",
+              fontSize: 9,
+            }}
+          >
+            EDIT
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
 /* ─── Main component ─────────────────────────────────────── */
 
 export default function RunAnalysisClient({
   run,
   laps,
   timeseries,
+  shoes,
 }: {
   run: RunDetail
   laps: Lap[]
   timeseries: TimePoint[]
+  shoes: Shoe[]
 }) {
   const [showHR,   setShowHR]   = useState(true)
   const [showCad,  setShowCad]  = useState(false)
@@ -362,6 +516,9 @@ export default function RunAnalysisClient({
           <StatBox label="DURATION"  value={run.total_time} />
         </div>
       </div>
+
+      {/* ── Shoe strip ──────────────────────────────────────── */}
+      <ShoeStrip runId={run.id} shoes={shoes} initialShoeId={run.shoe_id} />
 
       {/* ── Main two-column layout ───────────────────────────── */}
       <div className="flex flex-1 min-h-0">

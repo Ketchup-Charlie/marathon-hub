@@ -11,10 +11,11 @@ export async function PATCH(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await req.json() as { title?: string | null; run_type_tag?: string | null }
+  const body = await req.json() as { title?: string | null; run_type_tag?: string | null; shoe_id?: string | null }
   const update: Record<string, unknown> = {}
-  if ('title' in body) update.title = body.title
+  if ('title'        in body) update.title        = body.title
   if ('run_type_tag' in body) update.run_type_tag = body.run_type_tag
+  if ('shoe_id'      in body) update.shoe_id      = body.shoe_id
 
   const { error } = await supabase
     .from('completed_runs')
