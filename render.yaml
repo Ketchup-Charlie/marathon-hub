@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: marathon-hub
+    runtime: node
+    buildCommand: npm install && pip3 install -r parser/requirements.txt && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: HERMES_API_URL
+        sync: false
+      - key: HERMES_API_KEY
+        sync: false
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: PYTHON_PATH
+        value: python3
