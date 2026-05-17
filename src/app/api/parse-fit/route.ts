@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { execFile } from 'child_process'
+import { exec, execFile } from 'child_process'
 import { writeFile, unlink } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -8,6 +8,15 @@ import { createClient } from '@/lib/supabase/server'
 
 const PYTHON = process.env.PYTHON_PATH ?? 'python'
 const PARSER = join(process.cwd(), 'parser', 'fit_parser.py')
+
+function extractFitFromZip(zipPath: string, fitPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    exec(`unzip -p "${zipPath}" "*.fit" > "${fitPath}"`, { timeout: 15_000 }, (err) => {
+      if (err) reject(new Error(`ZIP extraction failed: ${err.message}`))
+      else resolve()
+    })
+  })
+}
 
 function runParser(fitPath: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -41,17 +50,29 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'Missing file field' }, { status: 400 })
   }
 
-  if (!file.name.endsWith('.fit')) {
-    return Response.json({ error: 'Only .fit files are accepted' }, { status: 400 })
+  const lowerName = file.name.toLowerCase()
+  const isZip = lowerName.endsWith('.zip')
+  const isFit = lowerName.endsWith('.fit')
+
+  if (!isFit && !isZip) {
+    return Response.json({ error: 'Only .fit and .zip files are accepted' }, { status: 400 })
   }
 
-  const tmpPath = join(tmpdir(), `${randomUUID()}.fit`)
+  const uploadPath = join(tmpdir(), `${randomUUID()}${isZip ? '.zip' : '.fit'}`)
+  let fitPath: string | null = null
 
   try {
     const bytes = await file.arrayBuffer()
-    await writeFile(tmpPath, Buffer.from(bytes))
+    await writeFile(uploadPath, Buffer.from(bytes))
 
-    const stdout = await runParser(tmpPath)
+    if (isZip) {
+      fitPath = join(tmpdir(), `${randomUUID()}.fit`)
+      await extractFitFromZip(uploadPath, fitPath)
+    } else {
+      fitPath = uploadPath
+    }
+
+    const stdout = await runParser(fitPath)
 
     let parsed: unknown
     try {
@@ -69,6 +90,7 @@ export async function POST(request: NextRequest) {
     const message = err instanceof Error ? err.message : String(err)
     return Response.json({ error: message }, { status: 500 })
   } finally {
-    unlink(tmpPath).catch(() => {})
+    unlink(uploadPath).catch(() => {})
+    if (fitPath && fitPath !== uploadPath) unlink(fitPath).catch(() => {})
   }
 }

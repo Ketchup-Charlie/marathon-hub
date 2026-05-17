@@ -117,7 +117,8 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
   /* ── File handling ──────────────────────────────────────── */
 
   const acceptFile = useCallback((f: File) => {
-    if (!f.name.toLowerCase().endsWith(".fit")) return
+    const lower = f.name.toLowerCase()
+    if (!lower.endsWith(".fit") && !lower.endsWith(".zip")) return
     setFile(f)
     setParsed(null)
     setResultRunId(null)
@@ -300,7 +301,7 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
               ) : (
                 <div className="flex flex-col items-center gap-2">
                   <span className="label-caps text-[var(--on-surface-variant)]">
-                    DROP .FIT FILE HERE OR CLICK TO SELECT
+                    DROP .FIT OR .ZIP FILE HERE OR CLICK TO SELECT
                   </span>
                   <span
                     className="code-data text-[var(--on-surface-variant)]"
@@ -315,7 +316,7 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".fit"
+              accept=".fit,.zip"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0]
