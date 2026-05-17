@@ -1,21 +1,23 @@
 import { NextRequest } from 'next/server'
-import { exec, execFile } from 'child_process'
+import { execFile } from 'child_process'
+import { renameSync } from 'fs'
 import { writeFile, unlink } from 'fs/promises'
-import { join } from 'path'
+import { join, dirname } from 'path'
 import { tmpdir } from 'os'
 import { randomUUID } from 'crypto'
+import AdmZip from 'adm-zip'
 import { createClient } from '@/lib/supabase/server'
 
 const PYTHON = process.env.PYTHON_PATH ?? 'python'
 const PARSER = join(process.cwd(), 'parser', 'fit_parser.py')
 
-function extractFitFromZip(zipPath: string, fitPath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    exec(`unzip -p "${zipPath}" "*.fit" > "${fitPath}"`, { timeout: 15_000 }, (err) => {
-      if (err) reject(new Error(`ZIP extraction failed: ${err.message}`))
-      else resolve()
-    })
-  })
+function extractFitFromZip(zipPath: string, fitPath: string): void {
+  const zip = new AdmZip(zipPath)
+  const fitEntry = zip.getEntries().find(e => e.entryName.endsWith('.fit'))
+  if (!fitEntry) throw new Error('No .fit file found inside zip')
+  zip.extractEntryTo(fitEntry, dirname(fitPath), false, true)
+  const extracted = join(dirname(fitPath), fitEntry.name)
+  if (extracted !== fitPath) renameSync(extracted, fitPath)
 }
 
 function runParser(fitPath: string): Promise<string> {
@@ -67,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     if (isZip) {
       fitPath = join(tmpdir(), `${randomUUID()}.fit`)
-      await extractFitFromZip(uploadPath, fitPath)
+      extractFitFromZip(uploadPath, fitPath)
     } else {
       fitPath = uploadPath
     }
