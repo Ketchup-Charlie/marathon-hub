@@ -5,18 +5,18 @@ import { usePathname } from "next/navigation"
 import { useState, useMemo } from "react"
 import {
   LayoutDashboard,
-  CalendarDays,
+  ListChecks,
   TrendingUp,
   Activity,
-  Package,
-  Zap,
-  CalendarClock,
-  ScrollText,
+  Heart,
+  Wrench,
+  Gauge,
+  Hourglass,
+  FileText,
   Stethoscope,
   Bell,
   Settings,
   Upload,
-  BarChart2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { calcPaces } from "@/lib/pace"
@@ -25,28 +25,20 @@ import { calcPaces } from "@/lib/pace"
 
 const PRIMARY_NAV = [
   { label: "DASHBOARD",       href: "/dashboard",                 icon: LayoutDashboard },
-  { label: "TRAINING_BLOCKS", href: "/dashboard/training-blocks", icon: CalendarDays    },
-  { label: "RUN_ANALYSIS",    href: "/dashboard/run-analysis",    icon: TrendingUp      },
-  { label: "PROGRESSION",    href: "/dashboard/progression",     icon: BarChart2       },
-  { label: "BIOMETRIC_LOG",   href: "/dashboard/biometric-log",   icon: Activity        },
-  { label: "GEAR_LAB",        href: "/dashboard/gear-lab",        icon: Package         },
-  { label: "RECOVERY_SCORE",  href: "/dashboard/recovery-score",  icon: Zap             },
-  { label: "SCHEDULE_ENGINE", href: "/dashboard/schedule-engine", icon: CalendarClock   },
+  { label: "TRAINING_BLOCKS", href: "/dashboard/training-blocks", icon: ListChecks      },
+  { label: "RUN_ANALYSIS",    href: "/dashboard/run-analysis",    icon: Activity        },
+  { label: "PROGRESSION",     href: "/dashboard/progression",     icon: TrendingUp      },
+  { label: "RECOVERY_SCORE",  href: "/dashboard/recovery-score",  icon: Gauge           },
+  { label: "BIOMETRIC_LOG",   href: "/dashboard/biometric-log",   icon: Heart           },
+  { label: "GEAR_LAB",        href: "/dashboard/gear-lab",        icon: Wrench          },
+  { label: "SCHEDULE_ENGINE", href: "/dashboard/schedule-engine", icon: Hourglass       },
   { label: "UPLOAD",          href: "/dashboard/upload",          icon: Upload          },
 ]
 
 const BOTTOM_NAV = [
   { label: "SETTINGS",     href: "/dashboard/settings",     icon: Settings    },
-  { label: "SYSTEM_LOGS",  href: "/dashboard/system-logs",  icon: ScrollText  },
+  { label: "SYSTEM_LOGS",  href: "/dashboard/system-logs",  icon: FileText    },
   { label: "DIAGNOSTICS",  href: "/dashboard/diagnostics",  icon: Stethoscope },
-]
-
-const TOP_TABS = [
-  { label: "LIVE_METRICS",    href: "/dashboard"                  },
-  { label: "TRAINING_PLAN",   href: "/dashboard/training-blocks"  },
-  { label: "RUN_ANALYSIS",    href: "/dashboard/run-analysis"     },
-  { label: "GEAR_LAB",        href: "/dashboard/gear-lab"         },
-  { label: "SCHEDULE_ENGINE", href: "/dashboard/schedule-engine"  },
 ]
 
 /* ─── Readiness helpers ─────────────────────────────────── */
@@ -93,32 +85,6 @@ function SidebarItem({
   )
 }
 
-/* ─── Top tab ───────────────────────────────────────────── */
-
-function TopTab({
-  label,
-  href,
-  active,
-}: {
-  label: string
-  href: string
-  active: boolean
-}) {
-  return (
-    <Link
-      href={href}
-      className={cn(
-        "label-caps px-4 py-3 border-b-2 transition-colors whitespace-nowrap",
-        active
-          ? "border-[var(--teal)] text-[var(--teal)]"
-          : "border-transparent text-[var(--on-surface-variant)] hover:text-[var(--on-surface)]"
-      )}
-    >
-      {label}
-    </Link>
-  )
-}
-
 /* ─── Shell ─────────────────────────────────────────────── */
 
 export default function DashboardShell({
@@ -135,12 +101,6 @@ export default function DashboardShell({
   const pathname = usePathname()
   const [targetTime, setTargetTime] = useState(raceConfig?.target_time ?? "4:15:00")
   const paces = useMemo(() => calcPaces(targetTime), [targetTime])
-
-  const activeTop = TOP_TABS.reduce<(typeof TOP_TABS)[0] | null>((best, tab) => {
-    if (!pathname.startsWith(tab.href)) return best
-    if (!best || tab.href.length > best.href.length) return tab
-    return best
-  }, null)
 
   const color = statusColor(readinessLevel)
 
@@ -220,23 +180,14 @@ export default function DashboardShell({
       {/* ── Main column ─────────────────────────────────────── */}
       <div className="flex flex-col flex-1 min-w-0">
 
-        {/* Top nav bar */}
+        {/* Top header bar */}
         <header
-          className="flex items-stretch border-b border-[var(--outline-variant)] flex-shrink-0"
+          className="flex items-center justify-between px-4 border-b border-[var(--outline-variant)] flex-shrink-0"
           style={{ backgroundColor: "var(--surface-container-lowest)", height: 44 }}
         >
-          <nav className="flex items-stretch flex-1">
-            {TOP_TABS.map((tab) => (
-              <TopTab
-                key={tab.href}
-                label={tab.label}
-                href={tab.href}
-                active={activeTop?.href === tab.href}
-              />
-            ))}
-          </nav>
+          <span className="label-caps text-[var(--teal)] tracking-widest">MARATHON_OS</span>
 
-          <div className="flex items-center gap-1 px-3 border-l border-[var(--outline-variant)]">
+          <div className="flex items-center gap-1">
             <button
               aria-label="Notifications"
               className="p-1.5 text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] transition-colors"
