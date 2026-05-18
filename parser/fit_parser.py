@@ -8,7 +8,10 @@ Usage: python fit_parser.py <path/to/activity.fit> [--debug]
 import sys
 import json
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from fitparse import FitFile
+
+_AEST = ZoneInfo("Australia/Sydney")
 
 # ---------------------------------------------------------------------------
 # Field name variants
@@ -143,7 +146,11 @@ def parse_session(fitfile: FitFile) -> dict:
     title = session.get("unknown_110") or None
 
     return {
-        "date": start_time.strftime("%Y-%m-%d") if isinstance(start_time, datetime) else None,
+        "date": (
+            (start_time if start_time.tzinfo else start_time.replace(tzinfo=ZoneInfo("UTC")))
+            .astimezone(_AEST)
+            .strftime("%Y-%m-%d")
+        ) if isinstance(start_time, datetime) else None,
         "title": title,
         "total_distance": round(distance_m / 1000, 3) if distance_m else None,
         "total_time": _seconds_to_interval(time_s),

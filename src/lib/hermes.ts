@@ -1,5 +1,15 @@
-const BASE = process.env.HERMES_API_URL
-const KEY  = process.env.HERMES_API_KEY
+import { createClient as createSupabaseClient } from '@/lib/supabase/server'
+
+const BASE        = process.env.HERMES_API_URL
+const KEY         = process.env.HERMES_API_KEY
+const OWNER_EMAIL = process.env.HERMES_OWNER_EMAIL
+
+async function isOwner(): Promise<boolean> {
+  if (!OWNER_EMAIL) return false
+  const supabase = await createSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  return user?.email === OWNER_EMAIL
+}
 
 /* ─── Raw API shapes ────────────────────────────────────── */
 
@@ -95,7 +105,8 @@ async function hermesFetch<T>(path: string): Promise<T> {
 
 /* ─── Endpoints ─────────────────────────────────────────── */
 
-export async function getMetricsSummary(): Promise<MetricsSummary> {
+export async function getMetricsSummary(): Promise<MetricsSummary | null> {
+  if (!(await isOwner())) return null
   const raw = await hermesFetch<HermesRaw>("/metrics/summary")
   return {
     hrv_baseline_ms:    raw.hrv.avg_overnight_hrv,
@@ -109,21 +120,25 @@ export async function getMetricsSummary(): Promise<MetricsSummary> {
 }
 
 export async function getConsistencyData(): Promise<{ date: string; total_distance_km: number }[]> {
+  if (!(await isOwner())) return []
   const raw = await hermesFetch<ConsistencyRaw>("/metrics/consistency")
   return raw.daily_running ?? []
 }
 
 export async function getHrvTrend(): Promise<HrvTrendPoint[]> {
+  if (!(await isOwner())) return []
   const raw = await hermesFetch<HrvTrendRaw>("/metrics/hrv-trend")
   return (raw.hrv_trend ?? raw.data ?? []) as HrvTrendPoint[]
 }
 
 export async function getSleepTrend(): Promise<SleepTrendPoint[]> {
+  if (!(await isOwner())) return []
   const raw = await hermesFetch<SleepTrendRaw>("/metrics/sleep-trend")
   return raw.data ?? raw.sleep_trend ?? []
 }
 
 export async function getReadinessTrend(): Promise<ReadinessTrendPoint[]> {
+  if (!(await isOwner())) return []
   const raw = await hermesFetch<ReadinessTrendRaw>("/metrics/readiness-trend")
   return raw.data ?? raw.readiness_trend ?? []
 }

@@ -33,6 +33,9 @@
   --teal-dim:                 #00CED1;
   --on-teal:                  #003738;
 
+  /* Error / destructive */
+  --error:                    #FF5449;
+
   /* Semantic aliases used throughout components */
   --background:               var(--surface);
   --foreground:               var(--on-surface);

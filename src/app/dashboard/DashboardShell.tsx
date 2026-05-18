@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useState, useMemo } from "react"
 import {
   LayoutDashboard,
@@ -17,9 +17,11 @@ import {
   Bell,
   Settings,
   Upload,
+  LogOut,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { calcPaces } from "@/lib/pace"
+import { createClient } from "@/lib/supabase/client"
 
 /* ─── Nav data ──────────────────────────────────────────── */
 
@@ -99,8 +101,15 @@ export default function DashboardShell({
   raceConfig: { target_time: string } | null
 }) {
   const pathname = usePathname()
+  const router = useRouter()
   const [targetTime, setTargetTime] = useState(raceConfig?.target_time ?? "4:15:00")
   const paces = useMemo(() => calcPaces(targetTime), [targetTime])
+
+  async function handleSignOut() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push("/login")
+  }
 
   const color = statusColor(readinessLevel)
 
@@ -164,6 +173,13 @@ export default function DashboardShell({
               active={pathname.startsWith(item.href)}
             />
           ))}
+          <button
+            onClick={handleSignOut}
+            className="flex items-center gap-2.5 px-3 py-2 label-caps transition-colors w-full text-left text-[var(--error)] hover:bg-[var(--surface-container)]"
+          >
+            <LogOut size={14} strokeWidth={1.5} />
+            <span>SIGN_OUT</span>
+          </button>
         </div>
 
         {/* Status footer */}

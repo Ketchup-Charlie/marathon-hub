@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -30,78 +31,107 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontFamily: 'sans-serif',
-      }}
-    >
-      <div style={{ width: '100%', maxWidth: 360, padding: '0 16px' }}>
-        <h1 style={{ marginBottom: 8, fontSize: 24, fontWeight: 700 }}>
-          Marathon Hub
-        </h1>
-        <p style={{ marginBottom: 24, color: '#666' }}>Sign in to your account</p>
+    <div className="min-h-screen flex items-center justify-center bg-[var(--surface)]">
+      <div className="w-full px-4" style={{ maxWidth: 360 }}>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 14 }}>
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
+        {/* Header */}
+        <div className="mb-8">
+          <div className="label-caps tracking-widest mb-1" style={{ color: 'var(--teal)', fontSize: 11 }}>
+            MARATHON_OS
+          </div>
+          <div className="label-caps" style={{ color: 'var(--on-surface)', fontSize: 18, fontWeight: 700 }}>
+            AUTHENTICATE
+          </div>
+          <div className="label-caps mt-1" style={{ color: 'var(--on-surface-variant)', fontSize: 10 }}>
+            ENTER CREDENTIALS TO CONTINUE
+          </div>
+        </div>
+
+        {/* Card */}
+        <div
+          className="p-6"
+          style={{
+            border: '1px solid var(--outline-variant)',
+            backgroundColor: 'var(--surface-container-lowest)',
+          }}
+        >
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+
+            <label className="flex flex-col gap-1.5">
+              <span className="label-caps" style={{ color: 'var(--on-surface-variant)', fontSize: 10 }}>
+                EMAIL_ADDRESS
+              </span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                className="code-data bg-transparent outline-none w-full px-3 py-2"
+                style={{
+                  border: '1px solid var(--outline-variant)',
+                  color: 'var(--on-surface)',
+                  fontSize: 14,
+                  caretColor: 'var(--teal)',
+                }}
+              />
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="label-caps" style={{ color: 'var(--on-surface-variant)', fontSize: 10 }}>
+                PASSWORD
+              </span>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+                className="code-data bg-transparent outline-none w-full px-3 py-2"
+                style={{
+                  border: '1px solid var(--outline-variant)',
+                  color: 'var(--on-surface)',
+                  fontSize: 14,
+                  caretColor: 'var(--teal)',
+                }}
+              />
+            </label>
+
+            {error && (
+              <div className="label-caps" style={{ color: 'var(--error)', fontSize: 10 }}>
+                ERR: {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="label-caps w-full py-2.5 mt-1 transition-opacity"
               style={{
-                padding: '8px 12px',
-                border: '1px solid #ccc',
-                borderRadius: 6,
-                fontSize: 16,
+                backgroundColor: 'var(--teal)',
+                color: 'var(--on-teal)',
+                fontSize: 11,
+                opacity: loading ? 0.5 : 1,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                border: 'none',
               }}
-            />
-          </label>
+            >
+              {loading ? 'AUTHENTICATING…' : 'SIGN_IN →'}
+            </button>
+          </form>
+        </div>
 
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 14 }}>
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-              style={{
-                padding: '8px 12px',
-                border: '1px solid #ccc',
-                borderRadius: 6,
-                fontSize: 16,
-              }}
-            />
-          </label>
-
-          {error && (
-            <p style={{ color: '#c00', fontSize: 14, margin: 0 }}>{error}</p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              marginTop: 8,
-              padding: '10px 0',
-              background: '#111',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 6,
-              fontSize: 16,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.6 : 1,
-            }}
+        {/* Footer link */}
+        <div className="mt-4 text-center">
+          <Link
+            href="/signup"
+            className="label-caps transition-colors"
+            style={{ color: 'var(--on-surface-variant)', fontSize: 10 }}
           >
-            {loading ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
+            NEW_USER? <span style={{ color: 'var(--teal)' }}>CREATE_ACCOUNT →</span>
+          </Link>
+        </div>
+
       </div>
     </div>
   )
