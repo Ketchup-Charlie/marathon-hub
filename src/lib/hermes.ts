@@ -142,3 +142,22 @@ export async function getReadinessTrend(): Promise<ReadinessTrendPoint[]> {
   const raw = await hermesFetch<ReadinessTrendRaw>("/metrics/readiness-trend")
   return raw.data ?? raw.readiness_trend ?? []
 }
+
+export type TrainingLoadPoint = {
+  date:         string
+  acute_load:   number | null
+  chronic_load: number | null
+  load_ratio:   number | null
+  acwr_status:  string | null
+}
+
+type TrainingLoadRaw = {
+  data?:          TrainingLoadPoint[]
+  training_load?: TrainingLoadPoint[]
+}
+
+export async function getTrainingLoadTrend(): Promise<TrainingLoadPoint[]> {
+  if (!(await isOwner())) return []
+  const raw = await hermesFetch<TrainingLoadRaw>("/metrics/training-load")
+  return raw.data ?? raw.training_load ?? []
+}

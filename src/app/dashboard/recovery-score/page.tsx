@@ -4,9 +4,13 @@ import {
   getMetricsSummary,
   getReadinessTrend,
   getSleepTrend,
+  getHrvTrend,
+  getTrainingLoadTrend,
   type MetricsSummary,
   type ReadinessTrendPoint,
   type SleepTrendPoint,
+  type HrvTrendPoint,
+  type TrainingLoadPoint,
 } from '@/lib/hermes'
 import RecoveryScoreClient, { type TomorrowWorkout } from './RecoveryScoreClient'
 
@@ -20,14 +24,22 @@ export default async function RecoveryScorePage() {
   tomorrowDay.setDate(tomorrowDay.getDate() + 1)
   const tomorrowStr = tomorrowDay.toLocaleDateString('en-CA')
 
-  let summary:         MetricsSummary | null   = null
-  let readinessTrend:  ReadinessTrendPoint[]   = []
-  let sleepTrend:      SleepTrendPoint[]       = []
-  let tomorrowWorkout: TomorrowWorkout         = null
+  const [summaryResult, readinessTrendResult, sleepTrendResult, hrvTrendResult, trainingLoadResult] =
+    await Promise.allSettled([
+      getMetricsSummary(),
+      getReadinessTrend(),
+      getSleepTrend(),
+      getHrvTrend(),
+      getTrainingLoadTrend(),
+    ])
 
-  try { summary        = await getMetricsSummary()  } catch (e) { console.error('[recovery-score] summary:', e)   }
-  try { readinessTrend = await getReadinessTrend()   } catch (e) { console.error('[recovery-score] readiness:', e) }
-  try { sleepTrend     = await getSleepTrend()       } catch (e) { console.error('[recovery-score] sleep:', e)    }
+  const summary:           MetricsSummary | null  = summaryResult.status        === 'fulfilled' ? summaryResult.value        : null
+  const readinessTrend:    ReadinessTrendPoint[]   = readinessTrendResult.status === 'fulfilled' ? readinessTrendResult.value : []
+  const sleepTrend:        SleepTrendPoint[]       = sleepTrendResult.status     === 'fulfilled' ? sleepTrendResult.value     : []
+  const hrvTrend:          HrvTrendPoint[]         = hrvTrendResult.status       === 'fulfilled' ? hrvTrendResult.value       : []
+  const trainingLoadTrend: TrainingLoadPoint[]     = trainingLoadResult.status   === 'fulfilled' ? trainingLoadResult.value   : []
+
+  let tomorrowWorkout: TomorrowWorkout = null
 
   try {
     const { data: block } = await supabase
@@ -47,7 +59,7 @@ export default async function RecoveryScorePage() {
         .maybeSingle()
       tomorrowWorkout = workout ?? null
     }
-  } catch (e) { console.error('[recovery-score] tomorrow workout:', e) }
+  } catch (e) { console.error('[health] tomorrow workout:', e) }
 
   const dedupedReadiness = (() => {
     const byDate = new Map<string, typeof readinessTrend[number]>()
@@ -65,6 +77,8 @@ export default async function RecoveryScorePage() {
       summary={summary}
       readinessTrend={dedupedReadiness}
       sleepTrend={sleepTrend}
+      hrvTrend={hrvTrend}
+      trainingLoadTrend={trainingLoadTrend}
       tomorrowWorkout={tomorrowWorkout}
     />
   )
