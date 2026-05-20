@@ -32,7 +32,7 @@ export default async function BlockViewPage() {
 
   const { data: workouts } = await supabase
     .from('planned_workouts')
-    .select('id, date, workout_type, description, target_distance_km, target_metric_type, target_metric_min, target_metric_max, schedule_status')
+    .select('id, date, workout_type, description, target_distance_km, target_metric_type, target_metric_min, target_metric_max, schedule_status, secondary_type, secondary_description')
     .eq('block_id', block.id)
     .order('date')
 

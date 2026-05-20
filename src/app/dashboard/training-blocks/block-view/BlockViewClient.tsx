@@ -24,6 +24,8 @@ type Workout = {
   target_metric_min: string | null
   target_metric_max: string | null
   schedule_status: string
+  secondary_type: string | null
+  secondary_description: string | null
 }
 
 type ModalState = {
@@ -41,6 +43,8 @@ type FormState = {
   target_metric_max: string
   description: string
   phase: string
+  secondary_type: string
+  secondary_description: string
 }
 
 /* ─── Constants ──────────────────────────────────────────── */
@@ -55,18 +59,21 @@ const TYPE_COLOR: Record<string, string> = {
   Rest:     'var(--surface-container-highest)',
 }
 
-const WORKOUT_TYPES = ['Easy', 'Long', 'Tempo', 'Interval', 'Race', 'Strength', 'Rest']
-const METRIC_TYPES  = ['Pace', 'HR', 'RPE']
-const PHASE_TYPES   = ['BASE', 'BUILD', 'PEAK', 'TAPER', 'RACE']
+const WORKOUT_TYPES    = ['Easy', 'Long', 'Tempo', 'Interval', 'Race', 'Strength', 'Rest']
+const METRIC_TYPES     = ['Pace', 'HR', 'RPE']
+const PHASE_TYPES      = ['BASE', 'BUILD', 'PEAK', 'TAPER', 'RACE']
+const SECONDARY_TYPES  = ['None', 'Strength', 'Mobility', 'Stretch', 'Cross-train', 'Rest']
 
 const EMPTY_FORM: FormState = {
-  workout_type:       'Easy',
-  target_distance_km: '',
-  target_metric_type: 'HR',
-  target_metric_min:  '',
-  target_metric_max:  '',
-  description:        '',
-  phase:              'BASE',
+  workout_type:          'Easy',
+  target_distance_km:    '',
+  target_metric_type:    'HR',
+  target_metric_min:     '',
+  target_metric_max:     '',
+  description:           '',
+  phase:                 'BASE',
+  secondary_type:        '',
+  secondary_description: '',
 }
 
 /* ─── Helpers ────────────────────────────────────────────── */
@@ -203,13 +210,15 @@ export default function BlockViewClient({
     setForm(
       existing
         ? {
-            workout_type:       existing.workout_type,
-            target_distance_km: existing.target_distance_km?.toString() ?? '',
-            target_metric_type: existing.target_metric_type ?? 'HR',
-            target_metric_min:  existing.target_metric_min ?? '',
-            target_metric_max:  existing.target_metric_max ?? '',
-            description:        existing.description ?? '',
-            phase:              currentPhase,
+            workout_type:          existing.workout_type,
+            target_distance_km:    existing.target_distance_km?.toString() ?? '',
+            target_metric_type:    existing.target_metric_type ?? 'HR',
+            target_metric_min:     existing.target_metric_min ?? '',
+            target_metric_max:     existing.target_metric_max ?? '',
+            description:           existing.description ?? '',
+            phase:                 currentPhase,
+            secondary_type:        existing.secondary_type ?? '',
+            secondary_description: existing.secondary_description ?? '',
           }
         : { ...EMPTY_FORM, phase: currentPhase }
     )
@@ -228,12 +237,14 @@ export default function BlockViewClient({
     try {
       /* ── Workout save ──────────────────────────────────── */
       const payload = {
-        workout_type:       form.workout_type,
-        description:        form.description || null,
-        target_distance_km: form.target_distance_km ? parseFloat(form.target_distance_km) : null,
-        target_metric_type: form.target_metric_type || null,
-        target_metric_min:  form.target_metric_min || null,
-        target_metric_max:  form.target_metric_max || null,
+        workout_type:          form.workout_type,
+        description:           form.description || null,
+        target_distance_km:    form.target_distance_km ? parseFloat(form.target_distance_km) : null,
+        target_metric_type:    form.target_metric_type || null,
+        target_metric_min:     form.target_metric_min || null,
+        target_metric_max:     form.target_metric_max || null,
+        secondary_type:        form.secondary_type || null,
+        secondary_description: form.secondary_description || null,
       }
 
       const res = await fetch('/api/workouts', {
@@ -440,7 +451,17 @@ export default function BlockViewClient({
                           </>
                         ) : (
                           <>
-                            <TypeBadge type={workout.workout_type} />
+                            <div className="flex items-baseline gap-1 flex-wrap">
+                              <TypeBadge type={workout.workout_type} />
+                              {workout.description && (
+                                <span
+                                  className="label-caps text-[var(--on-surface-variant)]"
+                                  style={{ fontSize: 9, opacity: 0.65 }}
+                                >
+                                  — {workout.description}
+                                </span>
+                              )}
+                            </div>
                             {workout.target_distance_km != null && (
                               <span
                                 className="code-data text-[var(--on-surface)] mt-0.5"
@@ -462,6 +483,29 @@ export default function BlockViewClient({
                                 </span>
                               )}
                           </>
+                        )}
+
+                        {/* Secondary workout */}
+                        {workout.secondary_type && (
+                          <div
+                            className="flex items-baseline gap-1 flex-wrap mt-1 pt-1"
+                            style={{ borderTop: '1px solid var(--outline-variant)' }}
+                          >
+                            <span
+                              className="label-caps"
+                              style={{ color: '#a78bfa', fontSize: 8, letterSpacing: '0.08em' }}
+                            >
+                              {workout.secondary_type.toUpperCase()}
+                            </span>
+                            {workout.secondary_description && (
+                              <span
+                                className="label-caps"
+                                style={{ color: 'var(--on-surface-variant)', fontSize: 8, opacity: 0.65 }}
+                              >
+                                — {workout.secondary_description}
+                              </span>
+                            )}
+                          </div>
                         )}
 
                         {/* Description tooltip — below for W1 to avoid clipping by scroll edge */}
@@ -652,6 +696,49 @@ export default function BlockViewClient({
                   style={{ border: '1px solid var(--outline-variant)', outline: 'none', caretColor: 'var(--teal)' }}
                 />
               </label>
+
+              {/* secondary workout */}
+              <div
+                className="flex flex-col gap-3 pt-3"
+                style={{ borderTop: '1px solid var(--outline-variant)' }}
+              >
+                <span className="label-caps" style={{ color: '#a78bfa', fontSize: 9 }}>SECONDARY_WORKOUT</span>
+
+                <label className="flex flex-col gap-1">
+                  <span className="label-caps text-[var(--on-surface-variant)]">SECONDARY_TYPE</span>
+                  <select
+                    value={form.secondary_type || 'None'}
+                    onChange={e => setForm(f => ({
+                      ...f,
+                      secondary_type: e.target.value === 'None' ? '' : e.target.value,
+                      secondary_description: e.target.value === 'None' ? '' : f.secondary_description,
+                    }))}
+                    className="code-data px-2 py-1.5"
+                    style={{
+                      backgroundColor: 'var(--surface-container-high)',
+                      color:           form.secondary_type ? '#a78bfa' : 'var(--on-surface-variant)',
+                      border:          '1px solid var(--outline-variant)',
+                      outline:         'none',
+                    }}
+                  >
+                    {SECONDARY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </label>
+
+                {form.secondary_type && (
+                  <label className="flex flex-col gap-1">
+                    <span className="label-caps text-[var(--on-surface-variant)]">SECONDARY_DESCRIPTION</span>
+                    <input
+                      type="text"
+                      value={form.secondary_description}
+                      onChange={e => setForm(f => ({ ...f, secondary_description: e.target.value }))}
+                      placeholder="Optional notes"
+                      className="code-data text-[var(--on-surface)] bg-transparent px-2 py-1"
+                      style={{ border: '1px solid var(--outline-variant)', outline: 'none', caretColor: '#a78bfa' }}
+                    />
+                  </label>
+                )}
+              </div>
 
               {/* week phase */}
               <label className="flex flex-col gap-1">

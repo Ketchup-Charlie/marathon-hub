@@ -19,6 +19,9 @@ export type MergedDayRow = {
   runTypeTag: string | null
   comply: "green" | "amber" | "red" | "upcoming" | null
   segmentTarget: boolean
+  secondaryType: string | null
+  secondaryDescription: string | null
+  description: string | null
 }
 
 /* ─── Low-level helpers ──────────────────────────────────── */
@@ -172,7 +175,7 @@ export async function getPlannedWorkouts(blockId: string, fromDate: string, toDa
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("planned_workouts")
-    .select("id, date, workout_type, description, target_distance_km, target_metric_type, target_metric_min, target_metric_max")
+    .select("id, date, workout_type, description, target_distance_km, target_metric_type, target_metric_min, target_metric_max, secondary_type, secondary_description")
     .eq("block_id", blockId)
     .gte("date", fromDate)
     .lte("date", toDate)
@@ -224,16 +227,19 @@ export async function mergeWeekData(
     if (!pw) {
       return {
         date,
-        dayType:       "empty",
-        workoutType:   run?.run_type_tag ?? "",
-        targetDistKm:  null,
-        actualDistKm:  run?.total_distance ?? null,
-        targetPaceSec: null,
-        actualPaceStr: run?.avg_pace ?? null,
-        avgHr:         run?.avg_hr ?? null,
-        runTypeTag:    run?.run_type_tag ?? null,
-        comply:        null,
-        segmentTarget: false,
+        dayType:             "empty",
+        workoutType:         run?.run_type_tag ?? "",
+        targetDistKm:        null,
+        actualDistKm:        run?.total_distance ?? null,
+        targetPaceSec:       null,
+        actualPaceStr:       run?.avg_pace ?? null,
+        avgHr:               run?.avg_hr ?? null,
+        runTypeTag:          run?.run_type_tag ?? null,
+        comply:              null,
+        segmentTarget:       false,
+        secondaryType:       null,
+        secondaryDescription: null,
+        description:         null,
       } satisfies MergedDayRow
     }
 
@@ -251,9 +257,9 @@ export async function mergeWeekData(
     return {
       date,
       dayType,
-      workoutType:  pw.workout_type,
-      targetDistKm: pw.target_distance_km ?? null,
-      actualDistKm: run?.total_distance ?? null,
+      workoutType:   pw.workout_type,
+      targetDistKm:  pw.target_distance_km ?? null,
+      actualDistKm:  run?.total_distance ?? null,
       targetPaceSec,
       actualPaceStr: run?.avg_pace ?? null,
       avgHr:         run?.avg_hr ?? null,
@@ -269,7 +275,10 @@ export async function mergeWeekData(
         run?.avg_pace ?? null,
         isFuture,
       ),
-      segmentTarget: hasSegmentTarget(pw.description),
+      segmentTarget:       hasSegmentTarget(pw.description),
+      secondaryType:       (pw as { secondary_type?: string | null }).secondary_type ?? null,
+      secondaryDescription: (pw as { secondary_description?: string | null }).secondary_description ?? null,
+      description:         pw.description ?? null,
     } satisfies MergedDayRow
   })
 }

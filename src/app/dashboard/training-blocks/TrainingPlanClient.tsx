@@ -105,16 +105,35 @@ const WORKOUT_TYPE_COLOR: Record<string, string> = {
   Rest:     "var(--on-surface-variant)",
 }
 
-function WorkoutTypeCell({ type }: { type: string }) {
+function WorkoutTypeCell({ type, secondaryType, description, secondaryDescription }: {
+  type: string
+  secondaryType: string | null
+  description: string | null
+  secondaryDescription: string | null
+}) {
   const color = WORKOUT_TYPE_COLOR[type] ?? "var(--on-surface-variant)"
   const isRace = type === "Race"
   return (
-    <span
-      className="code-data"
-      style={{ color, fontWeight: isRace ? 700 : 400 }}
-    >
-      {isRace ? `🏁 ${type}` : type}
-    </span>
+    <div className="flex flex-col">
+      <span className="code-data" style={{ color, fontWeight: isRace ? 700 : 400 }}>
+        {isRace ? `🏁 ${type}` : type}
+        {description && (
+          <span className="code-data" style={{ color: "var(--on-surface-variant)", fontWeight: 400, opacity: 0.65 }}>
+            {" "}— {description}
+          </span>
+        )}
+      </span>
+      {secondaryType && (
+        <span className="code-data" style={{ color: "#a78bfa", fontSize: 10, opacity: 0.85 }}>
+          {secondaryType}
+          {secondaryDescription && (
+            <span className="code-data" style={{ color: "var(--on-surface-variant)", fontWeight: 400, opacity: 0.65 }}>
+              {" "}— {secondaryDescription}
+            </span>
+          )}
+        </span>
+      )}
+    </div>
   )
 }
 
@@ -520,7 +539,7 @@ export default function TrainingPlanClient({
                     <span className="code-data text-[var(--on-surface-variant)]">
                       {fmtDate(row.date)}
                     </span>
-                    <WorkoutTypeCell type={row.workoutType} />
+                    <WorkoutTypeCell type={row.workoutType} secondaryType={row.secondaryType} description={row.description} secondaryDescription={row.secondaryDescription} />
                     <span className="code-data text-[var(--on-surface)]">
                       {fmtDist(row.targetDistKm)}
                     </span>
