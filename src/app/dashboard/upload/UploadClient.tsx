@@ -572,7 +572,7 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
 
             {stage === "success" && resultRunId && (
               <div
-                className="flex items-center justify-between px-4 py-3"
+                className="flex flex-col gap-2 px-4 py-3"
                 style={{
                   border: "1px solid var(--teal)",
                   backgroundColor: "rgba(45, 219, 222, 0.05)",
@@ -588,17 +588,30 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
                     RUN_ID: {resultRunId}
                   </span>
                 </div>
-                <Link
-                  href={`/dashboard/run-analysis?run_id=${resultRunId}`}
-                  className="label-caps px-3 py-1.5 hover:bg-[var(--teal)] hover:text-[var(--on-teal)] transition-colors"
-                  style={{
-                    border: "1px solid var(--teal)",
-                    color: "var(--teal)",
-                    textDecoration: "none",
-                  }}
-                >
-                  VIEW_ANALYSIS →
-                </Link>
+                <div className="flex items-center gap-3">
+                  <Link
+                    href={`/dashboard/active-rick?run_id=${resultRunId}`}
+                    className="label-caps px-3 py-1.5 transition-colors"
+                    style={{
+                      backgroundColor: "var(--teal)",
+                      color: "var(--on-teal)",
+                      textDecoration: "none",
+                    }}
+                  >
+                    ANALYSE WITH ACTIVE_RICK →
+                  </Link>
+                  <Link
+                    href={`/dashboard/run-analysis?run_id=${resultRunId}`}
+                    className="label-caps px-3 py-1.5 hover:bg-[var(--teal)] hover:text-[var(--on-teal)] transition-colors"
+                    style={{
+                      border: "1px solid var(--teal)",
+                      color: "var(--teal)",
+                      textDecoration: "none",
+                    }}
+                  >
+                    VIEW_ANALYSIS →
+                  </Link>
+                </div>
               </div>
             )}
 

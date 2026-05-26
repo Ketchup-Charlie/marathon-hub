@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronDown, ChevronUp, Send, RefreshCw, FolderOpen, X } from "lucide-react"
+import { ChevronDown, ChevronUp, Send, RefreshCw, FolderOpen, X, Activity } from "lucide-react"
 import type { MetricsSummary, TrainingLoadPoint } from "@/lib/hermes"
 import { createClient } from "@/lib/supabase/client"
 import type {
@@ -61,6 +61,18 @@ type Props = {
   todayStr: string
   block: ActiveRickBlock
 }
+
+/* ─── Constants ──────────────────────────────────────────── */
+
+const PRE_RUN_PROMPT =
+  "Give me a pre-run check for today. Assess my readiness, HRV, sleep, and confirm or modify today's planned workout."
+
+const CHIPS: { label: string; prompt: string }[] = [
+  { label: "PRE_RUN CHECK",            prompt: PRE_RUN_PROMPT },
+  { label: "AM I ON TRACK FOR 4:15?",  prompt: "AM I ON TRACK FOR 4:15?" },
+  { label: "HOW IS MY TRAINING THIS WEEK?", prompt: "HOW IS MY TRAINING THIS WEEK?" },
+  { label: "ANALYSE MY LAST RUN",      prompt: "ANALYSE MY LAST RUN" },
+]
 
 /* ─── Helpers ────────────────────────────────────────────── */
 
@@ -227,6 +239,121 @@ export default function ActiveRickClient(props: Props) {
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const autoSendDoneRef = useRef(false)
+  // Ref always points to latest sendMessage — used by the auto-send effect
+  const sendMessageRef = useRef<((text: string, contextOverride?: string) => Promise<void>) | null>(null)
+
+  /* ── Core send logic ────────────────────────────────────── */
+
+  const sendMessage = useCallback(async (text: string, contextOverride?: string) => {
+    if (isLoading) return
+
+    const userMsg: Message = { role: "user", content: text }
+    setMessages(prev => [...prev, userMsg])
+    setIsLoading(true)
+
+    const supabase = createClient()
+    if (userId) {
+      supabase
+        .from("chat_messages")
+        .insert({ role: "user", content: text, user_id: userId })
+        .then(({ error }) => { if (error) console.error("chat_messages insert (user):", error) })
+    }
+
+    const context = contextOverride ?? buildContextString(props, loadedRuns)
+    const history = messages
+      .filter(m => m.role === "user" || m.role === "assistant")
+      .map(m => ({ role: m.role as "user" | "assistant", content: m.content }))
+
+    const weekPlanSection = context.match(/WEEK_PLAN:\n([\s\S]*?)(?:\n\n|$)/)
+    console.log('[active-rick] WEEK_PLAN sent:\n' + (weekPlanSection ? weekPlanSection[1] : '(none)'))
+
+    let assistantContent = ""
+    try {
+      const res = await fetch("/api/active-rick", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, context, history }),
+      })
+
+      if (!res.ok || !res.body) {
+        const errText = await res.text().catch(() => "")
+        setMessages(prev => [...prev, { role: "assistant", content: `ERROR: ${res.status} — ${errText || "upstream failure"}` }])
+        return
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+
+      setMessages(prev => [...prev, { role: "assistant", content: "" }])
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split("\n")
+        buffer = lines.pop() ?? ""
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue
+          const data = line.slice(6).trim()
+          if (data === "[DONE]") break
+          try {
+            const parsed = JSON.parse(data)
+            const delta = parsed.choices?.[0]?.delta?.content ?? ""
+            if (delta) {
+              assistantContent += delta
+              setMessages(prev => {
+                const updated = [...prev]
+                updated[updated.length - 1] = { role: "assistant", content: assistantContent }
+                return updated
+              })
+            }
+          } catch {
+            // skip malformed SSE lines
+          }
+        }
+      }
+
+      if (assistantContent && userId) {
+        supabase
+          .from("chat_messages")
+          .insert({ role: "assistant", content: assistantContent, user_id: userId })
+          .then(({ error }) => { if (error) console.error("chat_messages insert (assistant):", error) })
+      }
+    } catch (err) {
+      setMessages(prev => [...prev, { role: "assistant", content: `NETWORK_ERROR: ${err instanceof Error ? err.message : "unknown"}` }])
+    } finally {
+      setIsLoading(false)
+      inputRef.current?.focus()
+    }
+  }, [isLoading, messages, props, loadedRuns, userId])
+
+  // Keep ref pointing to latest sendMessage so effects with stale closures can still call it
+  sendMessageRef.current = sendMessage
+
+  /* ── Handle textarea send ───────────────────────────────── */
+
+  const handleSend = useCallback(async () => {
+    const text = input.trim()
+    if (!text || isLoading) return
+    setInput("")
+
+    // /new — clear session locally and in Supabase
+    if (text === "/new") {
+      setMessages([{ role: "system", content: "SYSTEM: New session started. Context refreshed." }])
+      if (userId) {
+        const supabase = createClient()
+        supabase.from("chat_messages").delete().eq("user_id", userId)
+          .then(({ error }) => { if (error) console.error("chat_messages delete:", error) })
+      }
+      return
+    }
+
+    await sendMessage(text)
+  }, [input, isLoading, sendMessage, userId])
+
+  /* ── Sync ───────────────────────────────────────────────── */
 
   async function handleSync() {
     setSyncStatus("syncing")
@@ -248,6 +375,8 @@ export default function ActiveRickClient(props: Props) {
       setTimeout(() => setSyncStatus("idle"), 3000)
     }
   }
+
+  /* ── Run panel ──────────────────────────────────────────── */
 
   async function handleOpenRunPanel() {
     if (runPanelOpen) {
@@ -320,6 +449,8 @@ export default function ActiveRickClient(props: Props) {
     })
   }
 
+  /* ── Init: load chat history + userId ───────────────────── */
+
   useEffect(() => {
     const supabase = createClient()
     Promise.all([
@@ -340,106 +471,56 @@ export default function ActiveRickClient(props: Props) {
     })
   }, [])
 
+  /* ── Auto-load run from ?run_id= and send analysis prompt ── */
+
+  useEffect(() => {
+    if (!userId || autoSendDoneRef.current) return
+    const runId = new URLSearchParams(window.location.search).get("run_id")
+    if (!runId) return
+
+    autoSendDoneRef.current = true
+
+    ;(async () => {
+      const supabase = createClient()
+      const [runRes, lapsRes, tsRes] = await Promise.all([
+        supabase
+          .from("completed_runs")
+          .select("id, date, title, run_type_tag, total_distance, avg_pace, avg_hr, avg_cadence, avg_gct")
+          .eq("id", runId)
+          .maybeSingle(),
+        supabase
+          .from("run_laps")
+          .select("lap_number, distance, avg_pace, avg_hr, avg_cadence, avg_gct")
+          .eq("run_id", runId)
+          .order("lap_number"),
+        supabase
+          .from("run_timeseries")
+          .select("seconds_elapsed, pace_sec_per_km, hr, cadence")
+          .eq("run_id", runId)
+          .order("seconds_elapsed"),
+      ])
+
+      if (!runRes.data) return
+
+      const loadedRun: LoadedRun = {
+        ...(runRes.data as AvailableRun),
+        laps: (lapsRes.data ?? []) as RunLap[],
+        timeseries: (tsRes.data ?? []) as RunTimeseriesPoint[],
+      }
+
+      setLoadedRuns([loadedRun])
+      setSelectedRunIds(new Set([loadedRun.id]))
+
+      // Build context now with the freshly loaded run — don't rely on state settling
+      const ctx = buildContextString(props, [loadedRun])
+      const prompt = "I just completed this run. Analyse my performance, highlight any biomechanics flags, and compare to my recent sessions."
+      await sendMessageRef.current?.(prompt, ctx)
+    })()
+  }, [userId]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
-
-  const handleSend = useCallback(async () => {
-    const text = input.trim()
-    if (!text || isLoading) return
-    setInput("")
-
-    // /new — clear session locally and in Supabase
-    if (text === "/new") {
-      setMessages([{ role: "system", content: "SYSTEM: New session started. Context refreshed." }])
-      if (userId) {
-        const supabase = createClient()
-        supabase.from("chat_messages").delete().eq("user_id", userId)
-          .then(({ error }) => { if (error) console.error("chat_messages delete:", error) })
-      }
-      return
-    }
-
-    const userMsg: Message = { role: "user", content: text }
-    setMessages(prev => [...prev, userMsg])
-    setIsLoading(true)
-
-    const supabase = createClient()
-    if (userId) {
-      supabase
-        .from("chat_messages")
-        .insert({ role: "user", content: text, user_id: userId })
-        .then(({ error }) => { if (error) console.error("chat_messages insert (user):", error) })
-    }
-
-    const context = buildContextString(props, loadedRuns)
-    const history = messages
-      .filter(m => m.role === "user" || m.role === "assistant")
-      .map(m => ({ role: m.role as "user" | "assistant", content: m.content }))
-
-    const weekPlanSection = context.match(/WEEK_PLAN:\n([\s\S]*?)(?:\n\n|$)/)
-    console.log('[active-rick] WEEK_PLAN sent:\n' + (weekPlanSection ? weekPlanSection[1] : '(none)'))
-
-    let assistantContent = ""
-    try {
-      const res = await fetch("/api/active-rick", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, context, history }),
-      })
-
-      if (!res.ok || !res.body) {
-        const errText = await res.text().catch(() => "")
-        setMessages(prev => [...prev, { role: "assistant", content: `ERROR: ${res.status} — ${errText || "upstream failure"}` }])
-        return
-      }
-
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ""
-
-      setMessages(prev => [...prev, { role: "assistant", content: "" }])
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split("\n")
-        buffer = lines.pop() ?? ""
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue
-          const data = line.slice(6).trim()
-          if (data === "[DONE]") break
-          try {
-            const parsed = JSON.parse(data)
-            const delta = parsed.choices?.[0]?.delta?.content ?? ""
-            if (delta) {
-              assistantContent += delta
-              setMessages(prev => {
-                const updated = [...prev]
-                updated[updated.length - 1] = { role: "assistant", content: assistantContent }
-                return updated
-              })
-            }
-          } catch {
-            // skip malformed SSE lines
-          }
-        }
-      }
-
-      if (assistantContent && userId) {
-        supabase
-          .from("chat_messages")
-          .insert({ role: "assistant", content: assistantContent, user_id: userId })
-          .then(({ error }) => { if (error) console.error("chat_messages insert (assistant):", error) })
-      }
-    } catch (err) {
-      setMessages(prev => [...prev, { role: "assistant", content: `NETWORK_ERROR: ${err instanceof Error ? err.message : "unknown"}` }])
-    } finally {
-      setIsLoading(false)
-      inputRef.current?.focus()
-    }
-  }, [input, isLoading, messages, props, loadedRuns, userId])
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -448,11 +529,10 @@ export default function ActiveRickClient(props: Props) {
     }
   }
 
-  /* ── Context panel data ─────────────────────────────────── */
+  /* ── Derived display values ─────────────────────────────── */
 
   const latestLoad = trainingLoad.length > 0 ? trainingLoad[trainingLoad.length - 1] : null
   const todayPlanned = plannedWorkouts.find(w => w.date === todayStr) ?? null
-
   const acwr = latestLoad?.load_ratio != null ? latestLoad.load_ratio.toFixed(2) : null
   const acwrStatus = latestLoad?.acwr_status ?? null
 
@@ -469,6 +549,11 @@ export default function ActiveRickClient(props: Props) {
     const today = new Date(todayStr + "T00:00:00")
     blockWeek = Math.max(1, Math.floor((today.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1)
   }
+
+  const realMessageCount = messages.filter(m => m.role !== "system").length
+  const showChips = realMessageCount < 2
+
+  /* ── Render ─────────────────────────────────────────────── */
 
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: "var(--surface)", fontFamily: "monospace" }}>
@@ -503,7 +588,7 @@ export default function ActiveRickClient(props: Props) {
         )}
       </div>
 
-      {/* ── Context / run-panel bar ──────────────────────────── */}
+      {/* ── Context / tool bar ──────────────────────────────── */}
       <div style={{ borderBottom: "1px solid var(--outline-variant)", flexShrink: 0 }}>
         <div
           className="flex items-center"
@@ -531,6 +616,22 @@ export default function ActiveRickClient(props: Props) {
                 )}
               </span>
             )}
+          </button>
+
+          {/* pre-run check button */}
+          <button
+            onClick={() => sendMessage(PRE_RUN_PROMPT)}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3 py-2 label-caps transition-colors flex-shrink-0"
+            style={{
+              color: isLoading ? "var(--on-surface-variant)" : "var(--teal)",
+              opacity: isLoading ? 0.4 : 1,
+              cursor: isLoading ? "not-allowed" : "pointer",
+              borderLeft: "1px solid var(--outline-variant)",
+            }}
+          >
+            <Activity size={11} />
+            <span>PRE_RUN_CHECK</span>
           </button>
 
           {/* load runs button */}
@@ -803,6 +904,32 @@ export default function ActiveRickClient(props: Props) {
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* ── Suggested chips ──────────────────────────────────── */}
+      {showChips && (
+        <div
+          className="flex flex-wrap gap-2 px-4 py-2 flex-shrink-0"
+          style={{ borderTop: "1px solid var(--outline-variant)" }}
+        >
+          {CHIPS.map(chip => (
+            <button
+              key={chip.label}
+              onClick={() => sendMessage(chip.prompt)}
+              disabled={isLoading}
+              className="label-caps px-3 py-1.5 transition-colors"
+              style={{
+                border: "1px solid var(--teal)",
+                color: isLoading ? "var(--on-surface-variant)" : "var(--teal)",
+                opacity: isLoading ? 0.4 : 1,
+                cursor: isLoading ? "not-allowed" : "pointer",
+                fontSize: 10,
+              }}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── Input bar ────────────────────────────────────────── */}
       <div
