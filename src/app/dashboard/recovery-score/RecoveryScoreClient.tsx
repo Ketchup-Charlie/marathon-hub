@@ -1,6 +1,8 @@
 "use client"
 
-import React, { useMemo } from "react"
+import React, { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
+import { RefreshCw } from "lucide-react"
 import {
   ComposedChart,
   BarChart,
@@ -265,6 +267,30 @@ export default function RecoveryScoreClient({
   trainingLoadTrend:   TrainingLoadPoint[]
   tomorrowWorkout:     TomorrowWorkout
 }) {
+  const router = useRouter()
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "ok" | "error">("idle")
+
+  async function handleSync() {
+    setSyncStatus("syncing")
+    try {
+      const res = await fetch("/api/sync-health", { method: "POST" })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        console.error("sync-health error:", body)
+        setSyncStatus("error")
+        setTimeout(() => setSyncStatus("idle"), 3000)
+        return
+      }
+      setSyncStatus("ok")
+      router.refresh()
+      setTimeout(() => setSyncStatus("idle"), 2000)
+    } catch (err) {
+      console.error("sync-health network error:", err)
+      setSyncStatus("error")
+      setTimeout(() => setSyncStatus("idle"), 3000)
+    }
+  }
+
   const latestReadiness = readinessTrend[readinessTrend.length - 1] ?? null
   const latestSleep     = sleepTrend[sleepTrend.length - 1]         ?? null
 
@@ -355,16 +381,33 @@ export default function RecoveryScoreClient({
 
       {/* Status bar */}
       <div
-        className="flex items-center gap-3 px-4 flex-shrink-0"
+        className="flex items-center justify-between px-4 flex-shrink-0"
         style={{ height: 36, backgroundColor: "var(--surface-container-low)", borderBottom: "1px solid var(--outline-variant)" }}
       >
-        <span className="label-caps text-[var(--teal)]">HEALTH</span>
-        <span className="label-caps text-[var(--on-surface-variant)]">::</span>
-        <span className="label-caps" style={{ color: scoreColor(readinessScore) }}>{readinessLevel ?? "UNKNOWN"}</span>
-        <span className="label-caps text-[var(--on-surface-variant)]">::</span>
-        <span className="label-caps text-[var(--on-surface-variant)]">
-          {readinessScore != null ? `${readinessScore}/100` : "--"}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="label-caps text-[var(--teal)]">HEALTH</span>
+          <span className="label-caps text-[var(--on-surface-variant)]">::</span>
+          <span className="label-caps" style={{ color: scoreColor(readinessScore) }}>{readinessLevel ?? "UNKNOWN"}</span>
+          <span className="label-caps text-[var(--on-surface-variant)]">::</span>
+          <span className="label-caps text-[var(--on-surface-variant)]">
+            {readinessScore != null ? `${readinessScore}/100` : "--"}
+          </span>
+        </div>
+        {summary && (
+          <button
+            onClick={handleSync}
+            disabled={syncStatus === "syncing"}
+            className="flex items-center gap-1.5 px-2 py-1 label-caps transition-colors"
+            style={{
+              color: syncStatus === "ok" ? "var(--teal)" : syncStatus === "error" ? "#e05252" : "var(--on-surface-variant)",
+              opacity: syncStatus === "syncing" ? 0.6 : 1,
+              cursor: syncStatus === "syncing" ? "not-allowed" : "pointer",
+            }}
+          >
+            <RefreshCw size={11} className={syncStatus === "syncing" ? "animate-spin" : ""} />
+            <span>{syncStatus === "syncing" ? "SYNCING" : syncStatus === "ok" ? "SYNCED" : syncStatus === "error" ? "ERROR" : "SYNC"}</span>
+          </button>
+        )}
       </div>
 
       {/* Two-column body */}

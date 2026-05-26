@@ -17,6 +17,7 @@ import {
   Settings,
   Upload,
   LogOut,
+  Bot,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { calcPaces } from "@/lib/pace"
@@ -31,6 +32,7 @@ const PRIMARY_NAV = [
   { label: "PROGRESSION",     href: "/dashboard/progression",     icon: TrendingUp      },
   { label: "HEALTH",           href: "/dashboard/recovery-score",  icon: Gauge           },
   { label: "GEAR_LAB",        href: "/dashboard/gear-lab",        icon: Wrench          },
+  { label: "ACTIVE_RICK",     href: "/dashboard/active-rick",     icon: Bot             },
   { label: "SCHEDULE_ENGINE", href: "/dashboard/schedule-engine", icon: Hourglass       },
   { label: "UPLOAD",          href: "/dashboard/upload",          icon: Upload          },
 ]
