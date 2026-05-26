@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronDown, ChevronUp, Send, RefreshCw } from "lucide-react"
+import { ChevronDown, ChevronUp, Send, RefreshCw, FolderOpen, X } from "lucide-react"
 import type { MetricsSummary, TrainingLoadPoint } from "@/lib/hermes"
 import { createClient } from "@/lib/supabase/client"
 import type {
@@ -15,8 +15,41 @@ import type {
 /* ─── Types ──────────────────────────────────────────────── */
 
 type Message = {
-  role: "user" | "assistant"
+  role: "user" | "assistant" | "system"
   content: string
+}
+
+type AvailableRun = {
+  id: string
+  date: string
+  title: string | null
+  run_type_tag: string | null
+  total_distance: number | null
+  avg_pace: string | null
+  avg_hr: number | null
+  avg_cadence: number | null
+  avg_gct: number | null
+}
+
+type RunLap = {
+  lap_number: number
+  distance: number | null
+  avg_pace: string | null
+  avg_hr: number | null
+  avg_cadence: number | null
+  avg_gct: number | null
+}
+
+type RunTimeseriesPoint = {
+  seconds_elapsed: number
+  pace_sec_per_km: number | null
+  hr: number | null
+  cadence: number | null
+}
+
+type LoadedRun = AvailableRun & {
+  laps: RunLap[]
+  timeseries: RunTimeseriesPoint[]
 }
 
 type Props = {
@@ -29,9 +62,18 @@ type Props = {
   block: ActiveRickBlock
 }
 
+/* ─── Helpers ────────────────────────────────────────────── */
+
+function fmtPaceSecs(secsPerKm: number | null): string {
+  if (secsPerKm == null || isNaN(secsPerKm)) return "N/A"
+  const m = Math.floor(secsPerKm / 60)
+  const s = Math.round(secsPerKm % 60)
+  return `${m}:${String(s).padStart(2, "0")}`
+}
+
 /* ─── Context string builder ─────────────────────────────── */
 
-function buildContextString(props: Props): string {
+function buildContextString(props: Props, loadedRuns: LoadedRun[]): string {
   const { summary, trainingLoad, recentRuns, plannedWorkouts, raceConfig, block } = props
   // Always compute today's date fresh on the client so it reflects the real
   // current date — never rely on the server-rendered prop which can be stale.
@@ -124,6 +166,42 @@ function buildContextString(props: Props): string {
     lines.push("If asked about a day not listed, state that no workout is scheduled rather than inventing one.")
   }
 
+  if (loadedRuns.length > 0) {
+    lines.push("")
+    lines.push("LOADED_RUNS:")
+    loadedRuns.forEach((run, idx) => {
+      const dist = run.total_distance != null ? `${run.total_distance.toFixed(1)}km` : "N/A"
+      const pace = run.avg_pace ?? "N/A"
+      const hr = run.avg_hr != null ? ` | avg HR ${run.avg_hr}` : ""
+      const gct = run.avg_gct != null ? ` | avg GCT ${run.avg_gct}ms` : ""
+      const cad = run.avg_cadence != null ? ` | avg cadence ${run.avg_cadence}` : ""
+      lines.push(`RUN_${idx + 1}: ${run.date} | ${run.run_type_tag ?? "Run"} | ${dist} | avg pace ${pace}${hr}${gct}${cad}`)
+
+      if (run.laps.length > 0) {
+        const lapStr = run.laps.map(l => {
+          const d = l.distance != null ? `${l.distance.toFixed(1)}km` : ""
+          const p = l.avg_pace ?? ""
+          const h = l.avg_hr != null ? ` HR${l.avg_hr}` : ""
+          return `${l.lap_number}: ${d} ${p}${h}`.trim()
+        }).join(" | ")
+        lines.push(`  LAPS: ${lapStr}`)
+      }
+
+      // Downsample to every 2 minutes (every 12th point at 10s intervals)
+      const sampled = run.timeseries.filter((_, i) => i % 12 === 0)
+      if (sampled.length > 0) {
+        const tsStr = sampled.map(pt => {
+          const minStr = `${Math.floor(pt.seconds_elapsed / 60)}min`
+          const paceStr = pt.pace_sec_per_km != null ? `pace:${fmtPaceSecs(pt.pace_sec_per_km)}` : ""
+          const hrStr = pt.hr != null ? `HR:${pt.hr}` : ""
+          const cadStr = pt.cadence != null ? `cad:${pt.cadence}` : ""
+          return [minStr, paceStr, hrStr, cadStr].filter(Boolean).join(" ")
+        }).join(" | ")
+        lines.push(`  TIMESERIES: ${tsStr}`)
+      }
+    })
+  }
+
   return lines.join("\n")
 }
 
@@ -139,6 +217,14 @@ export default function ActiveRickClient(props: Props) {
   const [contextExpanded, setContextExpanded] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "ok" | "error">("idle")
+
+  // Run selector state
+  const [runPanelOpen, setRunPanelOpen] = useState(false)
+  const [availableRuns, setAvailableRuns] = useState<AvailableRun[]>([])
+  const [selectedRunIds, setSelectedRunIds] = useState<Set<string>>(new Set())
+  const [loadedRuns, setLoadedRuns] = useState<LoadedRun[]>([])
+  const [runPanelLoading, setRunPanelLoading] = useState(false)
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -161,6 +247,77 @@ export default function ActiveRickClient(props: Props) {
       setSyncStatus("error")
       setTimeout(() => setSyncStatus("idle"), 3000)
     }
+  }
+
+  async function handleOpenRunPanel() {
+    if (runPanelOpen) {
+      setRunPanelOpen(false)
+      return
+    }
+    setRunPanelOpen(true)
+    setContextExpanded(false)
+    if (availableRuns.length > 0) return
+    setRunPanelLoading(true)
+    const supabase = createClient()
+    const { data } = await supabase
+      .from("completed_runs")
+      .select("id, date, title, run_type_tag, total_distance, avg_pace, avg_hr, avg_cadence, avg_gct")
+      .order("date", { ascending: false })
+      .limit(20)
+    setAvailableRuns((data ?? []) as AvailableRun[])
+    setRunPanelLoading(false)
+  }
+
+  async function handleLoadRuns() {
+    if (selectedRunIds.size === 0) {
+      setRunPanelOpen(false)
+      return
+    }
+    const supabase = createClient()
+    const ids = Array.from(selectedRunIds)
+    const runDetails = await Promise.all(ids.map(async id => {
+      const base = availableRuns.find(r => r.id === id)!
+      const [lapsRes, tsRes] = await Promise.all([
+        supabase
+          .from("run_laps")
+          .select("lap_number, distance, avg_pace, avg_hr, avg_cadence, avg_gct")
+          .eq("run_id", id)
+          .order("lap_number"),
+        supabase
+          .from("run_timeseries")
+          .select("seconds_elapsed, pace_sec_per_km, hr, cadence")
+          .eq("run_id", id)
+          .order("seconds_elapsed"),
+      ])
+      return {
+        ...base,
+        laps: (lapsRes.data ?? []) as RunLap[],
+        timeseries: (tsRes.data ?? []) as RunTimeseriesPoint[],
+      } as LoadedRun
+    }))
+    setLoadedRuns(runDetails)
+    setRunPanelOpen(false)
+  }
+
+  function toggleRunSelection(id: string) {
+    setSelectedRunIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else if (next.size < 3) {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  function dismissRun(id: string) {
+    setLoadedRuns(prev => prev.filter(r => r.id !== id))
+    setSelectedRunIds(prev => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
   }
 
   useEffect(() => {
@@ -191,6 +348,18 @@ export default function ActiveRickClient(props: Props) {
     const text = input.trim()
     if (!text || isLoading) return
     setInput("")
+
+    // /new — clear session locally and in Supabase
+    if (text === "/new") {
+      setMessages([{ role: "system", content: "SYSTEM: New session started. Context refreshed." }])
+      if (userId) {
+        const supabase = createClient()
+        supabase.from("chat_messages").delete().eq("user_id", userId)
+          .then(({ error }) => { if (error) console.error("chat_messages delete:", error) })
+      }
+      return
+    }
+
     const userMsg: Message = { role: "user", content: text }
     setMessages(prev => [...prev, userMsg])
     setIsLoading(true)
@@ -203,8 +372,10 @@ export default function ActiveRickClient(props: Props) {
         .then(({ error }) => { if (error) console.error("chat_messages insert (user):", error) })
     }
 
-    const context = buildContextString(props)
-    const history = messages.map(m => ({ role: m.role, content: m.content }))
+    const context = buildContextString(props, loadedRuns)
+    const history = messages
+      .filter(m => m.role === "user" || m.role === "assistant")
+      .map(m => ({ role: m.role as "user" | "assistant", content: m.content }))
 
     const weekPlanSection = context.match(/WEEK_PLAN:\n([\s\S]*?)(?:\n\n|$)/)
     console.log('[active-rick] WEEK_PLAN sent:\n' + (weekPlanSection ? weekPlanSection[1] : '(none)'))
@@ -268,7 +439,7 @@ export default function ActiveRickClient(props: Props) {
       setIsLoading(false)
       inputRef.current?.focus()
     }
-  }, [input, isLoading, messages, props])
+  }, [input, isLoading, messages, props, loadedRuns, userId])
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -332,14 +503,15 @@ export default function ActiveRickClient(props: Props) {
         )}
       </div>
 
-      {/* ── Context panel ───────────────────────────────────── */}
+      {/* ── Context / run-panel bar ──────────────────────────── */}
       <div style={{ borderBottom: "1px solid var(--outline-variant)", flexShrink: 0 }}>
         <div
           className="flex items-center"
           style={{ backgroundColor: "var(--surface-container-lowest)" }}
         >
+          {/* expand context snapshot */}
           <button
-            onClick={() => setContextExpanded(v => !v)}
+            onClick={() => { setContextExpanded(v => !v); setRunPanelOpen(false) }}
             className="flex items-center gap-2 flex-1 px-4 py-2 label-caps transition-colors"
             style={{ color: "var(--on-surface-variant)" }}
           >
@@ -360,6 +532,21 @@ export default function ActiveRickClient(props: Props) {
               </span>
             )}
           </button>
+
+          {/* load runs button */}
+          <button
+            onClick={handleOpenRunPanel}
+            className="flex items-center gap-1.5 px-3 py-2 label-caps transition-colors flex-shrink-0"
+            style={{
+              color: runPanelOpen || loadedRuns.length > 0 ? "var(--teal)" : "var(--on-surface-variant)",
+              borderLeft: "1px solid var(--outline-variant)",
+            }}
+          >
+            <FolderOpen size={11} />
+            <span>LOAD_RUNS{loadedRuns.length > 0 ? ` (${loadedRuns.length})` : ""}</span>
+          </button>
+
+          {/* sync button */}
           {summary && (
             <button
               onClick={handleSync}
@@ -378,6 +565,7 @@ export default function ActiveRickClient(props: Props) {
           )}
         </div>
 
+        {/* context snapshot expanded */}
         {contextExpanded && (
           <div
             className="px-4 py-3 text-[11px] leading-relaxed"
@@ -456,7 +644,107 @@ export default function ActiveRickClient(props: Props) {
             )}
           </div>
         )}
+
+        {/* run selector panel */}
+        {runPanelOpen && (
+          <div
+            className="px-4 py-3 text-[11px]"
+            style={{
+              backgroundColor: "var(--surface-container)",
+              borderTop: "1px solid var(--outline-variant)",
+              maxHeight: 300,
+              overflowY: "auto",
+            }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="label-caps" style={{ color: "var(--teal)" }}>
+                SELECT_RUNS — max 3
+              </span>
+              <button
+                onClick={handleLoadRuns}
+                className="label-caps px-3 py-1 transition-colors"
+                style={{
+                  backgroundColor: selectedRunIds.size > 0 ? "var(--teal)" : "var(--surface-container-high)",
+                  color: selectedRunIds.size > 0 ? "var(--on-teal)" : "var(--on-surface-variant)",
+                }}
+              >
+                LOAD ({selectedRunIds.size})
+              </button>
+            </div>
+
+            {runPanelLoading ? (
+              <div style={{ color: "var(--on-surface-variant)" }}>loading runs...</div>
+            ) : availableRuns.length === 0 ? (
+              <div style={{ color: "var(--on-surface-variant)" }}>no completed runs found</div>
+            ) : (
+              <div className="flex flex-col gap-0.5">
+                {availableRuns.map(run => {
+                  const selected = selectedRunIds.has(run.id)
+                  const disabled = !selected && selectedRunIds.size >= 3
+                  return (
+                    <label
+                      key={run.id}
+                      className="flex items-center gap-3 px-2 py-1.5"
+                      style={{
+                        backgroundColor: selected ? "var(--surface-container-high)" : "transparent",
+                        opacity: disabled ? 0.35 : 1,
+                        cursor: disabled ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        disabled={disabled}
+                        onChange={() => toggleRunSelection(run.id)}
+                        style={{ accentColor: "var(--teal)", cursor: disabled ? "not-allowed" : "pointer" }}
+                      />
+                      <span style={{ color: "var(--on-surface-variant)", minWidth: 80 }}>{run.date}</span>
+                      <span style={{ color: "var(--on-surface)" }}>{run.run_type_tag ?? "Run"}</span>
+                      {run.total_distance != null && (
+                        <span style={{ color: "var(--on-surface-variant)" }}>{run.total_distance.toFixed(1)}km</span>
+                      )}
+                      {run.avg_pace && (
+                        <span style={{ color: "var(--on-surface-variant)" }}>@{run.avg_pace}/km</span>
+                      )}
+                      {run.title && (
+                        <span className="truncate" style={{ color: "var(--on-surface-variant)", opacity: 0.5 }}>{run.title}</span>
+                      )}
+                    </label>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* ── Loaded run tags ──────────────────────────────────── */}
+      {loadedRuns.length > 0 && (
+        <div
+          className="flex flex-wrap gap-2 px-4 py-2 flex-shrink-0"
+          style={{ borderBottom: "1px solid var(--outline-variant)", backgroundColor: "var(--surface-container-lowest)" }}
+        >
+          {loadedRuns.map(run => (
+            <div
+              key={run.id}
+              className="flex items-center gap-1.5 px-2 py-0.5 text-[10px] label-caps"
+              style={{ border: "1px solid var(--teal)", color: "var(--teal)", fontFamily: "monospace" }}
+            >
+              <span>
+                {run.date} {run.run_type_tag ?? "Run"}{run.total_distance != null ? ` ${run.total_distance.toFixed(1)}km` : ""}
+              </span>
+              <button
+                onClick={() => dismissRun(run.id)}
+                className="flex items-center"
+                style={{ color: "var(--teal)", lineHeight: 1 }}
+                aria-label="Remove run"
+              >
+                <X size={10} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Messages ─────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto min-h-0 px-4 py-4" style={{ gap: 12, display: "flex", flexDirection: "column" }}>
@@ -469,7 +757,14 @@ export default function ActiveRickClient(props: Props) {
 
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            {msg.role === "user" ? (
+            {msg.role === "system" ? (
+              <div
+                className="w-full text-center text-[10px] uppercase tracking-widest py-1"
+                style={{ color: "var(--teal)", fontFamily: "monospace", opacity: 0.75 }}
+              >
+                {msg.content}
+              </div>
+            ) : msg.role === "user" ? (
               <div
                 className="max-w-[70%] px-3 py-2 text-[12px] leading-relaxed"
                 style={{
@@ -521,7 +816,7 @@ export default function ActiveRickClient(props: Props) {
           onKeyDown={handleKeyDown}
           rows={1}
           disabled={isLoading}
-          placeholder="ask active rick..."
+          placeholder="ask active rick... (type /new to reset session)"
           className="flex-1 bg-transparent outline-none resize-none text-[12px] leading-relaxed"
           style={{
             color: "var(--on-surface)",
