@@ -28,9 +28,15 @@ function getWeekBounds(dateStr: string): { weekStart: string; weekEnd: string } 
   monday.setDate(d.getDate() - daysFromMonday)
   const sunday = new Date(monday)
   sunday.setDate(monday.getDate() + 6)
+  // Use local date components — toISOString() returns UTC and shifts dates by
+  // one day on UTC+ servers (e.g. AEST UTC+10), producing a Sunday–Saturday
+  // range instead of the correct Monday–Sunday range.
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const fmt = (dt: Date) =>
+    `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`
   return {
-    weekStart: monday.toISOString().slice(0, 10),
-    weekEnd: sunday.toISOString().slice(0, 10),
+    weekStart: fmt(monday),
+    weekEnd: fmt(sunday),
   }
 }
 
@@ -74,15 +80,19 @@ export default async function ActiveRickPage() {
   const todayStr = todayAEST()
   const { weekStart, weekEnd } = getWeekBounds(todayStr)
 
+  console.log('[active-rick] todayStr:', todayStr)
+  console.log(`[active-rick] weekBounds: weekStart=${weekStart} weekEnd=${weekEnd}`)
+
   let block: ActiveRickBlock = null
   {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('blocks')
       .select('id, start_date, race_date, total_weeks')
       .eq('user_id', user.id)
       .lte('start_date', todayStr)
       .gte('race_date', todayStr)
       .maybeSingle()
+    console.log('[active-rick] block query →', data ? { id: data.id, start_date: data.start_date, race_date: data.race_date, total_weeks: data.total_weeks } : null, error ? `ERROR: ${error.message}` : '')
     if (data) {
       const start = new Date(data.start_date + 'T00:00:00')
       const today = new Date(todayStr + 'T00:00:00')
@@ -116,7 +126,12 @@ export default async function ActiveRickPage() {
           .gte('date', weekStart)
           .lte('date', weekEnd)
           .order('date')
-          .then(r => (r.data ?? []) as ActiveRickPlannedWorkout[])
+          .then(r => {
+            console.log('[active-rick] planned_workouts query block_id=%s range=%s→%s rows=%d error=%s',
+              block.id, weekStart, weekEnd, r.data?.length ?? 0, r.error?.message ?? 'none')
+            console.log('[active-rick] planned_workouts rows:', JSON.stringify(r.data))
+            return (r.data ?? []) as ActiveRickPlannedWorkout[]
+          })
       : Promise.resolve([] as ActiveRickPlannedWorkout[]),
     supabase
       .from('race_config')

@@ -32,7 +32,10 @@ type Props = {
 /* ─── Context string builder ─────────────────────────────── */
 
 function buildContextString(props: Props): string {
-  const { summary, trainingLoad, recentRuns, plannedWorkouts, raceConfig, todayStr, block } = props
+  const { summary, trainingLoad, recentRuns, plannedWorkouts, raceConfig, block } = props
+  // Always compute today's date fresh on the client so it reflects the real
+  // current date — never rely on the server-rendered prop which can be stale.
+  const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Australia/Sydney" })
   const lines: string[] = ["CURRENT_DATA_SNAPSHOT:"]
 
   lines.push(`DATE: ${todayStr}`)
@@ -82,6 +85,21 @@ function buildContextString(props: Props): string {
     lines.push("TODAY_PLANNED: Rest / unscheduled")
   }
 
+  // Compute tomorrow's date using local components to avoid UTC day-shift on UTC+ servers
+  const tomorrowDate = new Date(todayStr + "T00:00:00")
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1)
+  const tp = (n: number) => String(n).padStart(2, "0")
+  const tomorrowStr = `${tomorrowDate.getFullYear()}-${tp(tomorrowDate.getMonth() + 1)}-${tp(tomorrowDate.getDate())}`
+  const tomorrowPlanned = plannedWorkouts.find(w => w.date === tomorrowStr)
+  if (tomorrowPlanned) {
+    let t = `${tomorrowPlanned.workout_type}`
+    if (tomorrowPlanned.target_distance_km) t += ` ${tomorrowPlanned.target_distance_km}km`
+    if (tomorrowPlanned.description) t += ` @ ${tomorrowPlanned.description}`
+    lines.push(`**TOMORROW_WORKOUT: ${t}**`)
+  } else {
+    lines.push("**TOMORROW_WORKOUT: REST**")
+  }
+
   if (recentRuns.length > 0) {
     lines.push("RECENT_RUNS:")
     recentRuns.slice(0, 3).forEach(run => {
@@ -97,8 +115,13 @@ function buildContextString(props: Props): string {
     lines.push("WEEK_PLAN:")
     plannedWorkouts.forEach(w => {
       const dist = w.target_distance_km != null ? ` ${w.target_distance_km}km` : ""
-      lines.push(`  ${w.date} | ${w.workout_type}${dist}`)
+      const desc = w.description ? ` @ ${w.description}` : ""
+      lines.push(`  ${w.date} | ${w.workout_type}${dist}${desc}`)
     })
+    lines.push("")
+    lines.push("⚠️ WEEK_PLAN IS AUTHORITATIVE — only recommend workouts listed above.")
+    lines.push("NEVER suggest a workout type, distance, or intensity not explicitly shown in WEEK_PLAN.")
+    lines.push("If asked about a day not listed, state that no workout is scheduled rather than inventing one.")
   }
 
   return lines.join("\n")
@@ -182,6 +205,9 @@ export default function ActiveRickClient(props: Props) {
 
     const context = buildContextString(props)
     const history = messages.map(m => ({ role: m.role, content: m.content }))
+
+    const weekPlanSection = context.match(/WEEK_PLAN:\n([\s\S]*?)(?:\n\n|$)/)
+    console.log('[active-rick] WEEK_PLAN sent:\n' + (weekPlanSection ? weekPlanSection[1] : '(none)'))
 
     let assistantContent = ""
     try {

@@ -1,6 +1,34 @@
 import { NextRequest, NextResponse } from "next/server"
 
-const SYSTEM_PROMPT = `You are ACTIVE_RICK, an elite marathon coaching AI embedded in Marathon_OS. You have real-time access to athlete biometric data, training load metrics, and workout history.
+const SYSTEM_PROMPT = `
+╔══════════════════════════════════════════════════════════════╗
+║                  !! HARD RULES — READ FIRST !!               ║
+╚══════════════════════════════════════════════════════════════╝
+
+RULE 1 — WEEK_PLAN IS THE ONLY SOURCE OF TRUTH FOR WORKOUTS.
+  Every workout recommendation MUST come directly from the WEEK_PLAN
+  in the CURRENT_DATA_SNAPSHOT. NEVER invent, substitute, add, or
+  extrapolate workout types, distances, or intensities not explicitly
+  listed there. If asked about a day not in WEEK_PLAN, say you don't
+  have a scheduled workout for that day rather than guessing.
+
+RULE 2 — NO DATE INVENTION.
+  NEVER reference a date that does not appear in the context snapshot.
+  If unsure of a date, say so.
+
+RULE 3 — TRUST THE SNAPSHOT.
+  The CURRENT_DATA_SNAPSHOT is always real-time current data.
+  Never question its freshness unless explicitly told otherwise.
+
+RULE 4 — SCOPE.
+  You are not a general assistant. Stay focused on marathon training,
+  recovery, and performance optimization.
+
+════════════════════════════════════════════════════════════════
+
+IDENTITY: You are ACTIVE_RICK, an elite marathon coaching AI embedded
+in Marathon_OS. You have real-time access to athlete biometric data,
+training load metrics, and workout history.
 
 Your role:
 - Analyze the CURRENT_DATA_SNAPSHOT provided before each message and give evidence-based coaching guidance
@@ -15,14 +43,7 @@ Communication style:
 - Reference the athlete's actual numbers when they're relevant
 - When ACWR is above 1.3 or readiness is LOW, flag overreaching risk directly
 - When HRV is trending down, acknowledge suppressed adaptation and recommend conservative load
-- Keep responses tight — 3–6 sentences is usually enough unless a detailed breakdown is requested
-
-Hard Rules:
-- ALWAYS reference WEEK_PLAN from the context snapshot when discussing tomorrow's or future workouts. Never invent workout types not in the plan.
-- NEVER reference dates not in the current context snapshot. If unsure of a date, say so rather than guessing.
-- The CURRENT_DATA_SNAPSHOT is always real-time current data. Never question its freshness unless explicitly told otherwise.
-
-You are not a general assistant. Stay focused on marathon training, recovery, and performance optimization.`
+- Keep responses tight — 3–6 sentences is usually enough unless a detailed breakdown is requested`
 
 type HistoryMessage = {
   role: "user" | "assistant"
@@ -41,6 +62,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "OPENROUTER_API_KEY not configured" }, { status: 500 })
   }
 
+  console.log('[active-rick] context received:\n', context ?? '(none)')
+
   const contextBlock = context
     ? `${context}\n\nATHLETE: ${message}`
     : message
@@ -50,10 +73,10 @@ export async function POST(req: NextRequest) {
     content: m.content,
   }))
 
-  const messages =
-    priorMessages.length === 0
-      ? [{ role: "user", content: contextBlock }]
-      : [...priorMessages, { role: "user", content: `ATHLETE: ${message}` }]
+  // Always append the fresh context snapshot with every turn — not just the
+  // first message. Without this, follow-up turns strip the snapshot and the
+  // model falls back to stale dates embedded in stored chat history.
+  const messages = [...priorMessages, { role: "user", content: contextBlock }]
 
   const upstream = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
