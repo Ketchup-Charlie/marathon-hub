@@ -361,6 +361,8 @@ export default function RecoveryScoreClient({
     const baseline = allVals.length > 0
       ? +(allVals.reduce((a, b) => a + b, 0) / allVals.length).toFixed(1)
       : null
+    const yMin = allVals.length > 0 ? Math.floor(Math.min(...allVals) / 5) * 5     : 35
+    const yMax = allVals.length > 0 ? Math.ceil(Math.max(...allVals)  / 5) * 5     : 75
     return {
       data: rhr28.map((d, i) => ({
         date:    fmtDate(d.sleep_date),
@@ -368,6 +370,8 @@ export default function RecoveryScoreClient({
         rolling: rolling[i],
       })),
       baseline,
+      yMin,
+      yMax,
     }
   }, [sleepTrend])
 
@@ -618,7 +622,7 @@ export default function RecoveryScoreClient({
                   <ComposedChart data={chartRhr.data} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
                     <CartesianGrid stroke="var(--surface-container-high)" strokeDasharray="" vertical={false} />
                     <XAxis dataKey="date" type="category" interval={rhrXInterval} tickFormatter={(v: string) => v ? v.slice(5) : ""} axisLine={{ stroke: "var(--outline-variant)" }} tickLine={false} tick={tickStyle} />
-                    <YAxis domain={[35, 75]} axisLine={false} tickLine={false} width={36} tick={{ ...tickStyle, fill: "var(--teal)" }} />
+                    <YAxis domain={[chartRhr.yMin, chartRhr.yMax]} axisLine={false} tickLine={false} width={36} tick={{ ...tickStyle, fill: "var(--teal)" }} />
                     <Tooltip
                       {...tooltipStyle}
                       labelFormatter={(val) => String(val).length >= 7 ? String(val).slice(5) : String(val)}
@@ -633,7 +637,7 @@ export default function RecoveryScoreClient({
                         label={{ value: `BASE: ${chartRhr.baseline}`, position: "insideTopRight", fill: "var(--teal)", fontSize: 8, opacity: 0.6, fontFamily: "var(--font-space-grotesk)" }}
                       />
                     )}
-                    <Line dataKey="rhr"     stroke="var(--teal)"  strokeWidth={1}   type="linear" dot={false} isAnimationActive={false} connectNulls={false} name="RHR" />
+                    <Line dataKey="rhr"     stroke="var(--teal)"  strokeWidth={0}   type="linear" dot={{ r: 3, fill: '#22d3ee', strokeWidth: 0 }} activeDot={{ r: 5 }} isAnimationActive={false} connectNulls={false} name="RHR" />
                     <Line dataKey="rolling" stroke="var(--amber)" strokeWidth={1.5} strokeDasharray="5 3" type="linear" dot={false} isAnimationActive={false} connectNulls={true} name="7D_AVG" />
                   </ComposedChart>
                 </ResponsiveContainer>
