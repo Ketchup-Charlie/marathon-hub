@@ -81,6 +81,7 @@ export type SleepTrendPoint = {
   deep_sleep_minutes:  number | null
   avg_overnight_hrv:   number | null
   sleep_score:         number | null
+  resting_heart_rate:  number | null
 }
 
 export type ReadinessTrendPoint = {

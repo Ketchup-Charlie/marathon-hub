@@ -345,6 +345,35 @@ export default function RecoveryScoreClient({
 
   const sleepXInterval = Math.max(1, Math.floor(chartSleep.length / 6))
 
+  /* ── RHR_TREND ─────────────────────────────────────────── */
+
+  const chartRhr = useMemo(() => {
+    const rhr28 = sleepTrend.slice(-28)
+    const vals  = rhr28.map((d) => d.resting_heart_rate ?? null)
+    const rolling = vals.map((_, i) => {
+      if (i < 6) return null
+      const slice = vals.slice(i - 6, i + 1)
+      const nums  = slice.filter((v): v is number => v != null)
+      if (nums.length === 0) return null
+      return +(nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(1)
+    })
+    const allVals = vals.filter((v): v is number => v != null)
+    const baseline = allVals.length > 0
+      ? +(allVals.reduce((a, b) => a + b, 0) / allVals.length).toFixed(1)
+      : null
+    return {
+      data: rhr28.map((d, i) => ({
+        date:    fmtDate(d.sleep_date),
+        rhr:     d.resting_heart_rate ?? null,
+        rolling: rolling[i],
+      })),
+      baseline,
+    }
+  }, [sleepTrend])
+
+  const rhrXInterval = Math.max(1, Math.floor(chartRhr.data.length / 6))
+  const currentRhr   = latestSleep?.resting_heart_rate ?? null
+
   /* ── TRAINING_LOAD ──────────────────────────────────────── */
 
   const chartLoad = useMemo(() =>
@@ -440,6 +469,7 @@ export default function RecoveryScoreClient({
               <MiniStat label="SLEEP_SCORE" value={sleepScore != null ? String(sleepScore) : "--"} color={scoreColor(sleepScore)} />
               <MiniStat label="HRV"         value={hrvMs != null ? `${Math.round(hrvMs)}` : "--"} />
               <MiniStat label="SLEEP_DUR"   value={fmtSleep(sleepDuration)} />
+              <MiniStat label="RHR"         value={currentRhr != null ? `${Math.round(currentRhr)}` : "--"} />
             </div>
 
             {/* System status */}
@@ -556,6 +586,56 @@ export default function RecoveryScoreClient({
                     <Bar dataKey="rem"   stackId="s" fill="var(--amber)" isAnimationActive={false} name="rem"   />
                     <Bar dataKey="light" stackId="s" fill="#6b7280"      isAnimationActive={false} name="light" />
                   </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <NoData />
+            )}
+          </div>
+
+          {/* RHR_TREND */}
+          <div className="flex flex-col flex-shrink-0 p-4" style={{ borderBottom: "1px solid var(--outline-variant)" }}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <span className="label-caps text-[var(--on-surface-variant)]">RHR_TREND</span>
+                {currentRhr != null && (
+                  <span
+                    className="label-caps"
+                    style={{ fontSize: 9, color: "var(--teal)", border: "1px solid var(--teal)", padding: "1px 5px", opacity: 0.9 }}
+                  >
+                    RHR: {Math.round(currentRhr)}bpm
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="label-caps" style={{ fontSize: 9, color: "var(--teal)" }}>■ DAILY_RHR</span>
+                <span className="label-caps" style={{ fontSize: 9, color: "var(--amber)" }}>┄ 7D_ROLLING_AVG</span>
+              </div>
+            </div>
+            {chartRhr.data.length > 0 ? (
+              <div style={{ height: 180 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartRhr.data} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
+                    <CartesianGrid stroke="var(--surface-container-high)" strokeDasharray="" vertical={false} />
+                    <XAxis dataKey="date" type="category" interval={rhrXInterval} tickFormatter={(v: string) => v ? v.slice(5) : ""} axisLine={{ stroke: "var(--outline-variant)" }} tickLine={false} tick={tickStyle} />
+                    <YAxis domain={[35, 75]} axisLine={false} tickLine={false} width={36} tick={{ ...tickStyle, fill: "var(--teal)" }} />
+                    <Tooltip
+                      {...tooltipStyle}
+                      labelFormatter={(val) => String(val).length >= 7 ? String(val).slice(5) : String(val)}
+                      formatter={(value, name) => [`${value} bpm`, name === "rolling" ? "7D_AVG" : "RHR"] as [string, string]}
+                    />
+                    {chartRhr.baseline != null && (
+                      <ReferenceLine
+                        y={chartRhr.baseline}
+                        stroke="var(--teal)"
+                        strokeDasharray="4 4"
+                        strokeOpacity={0.5}
+                        label={{ value: `BASE: ${chartRhr.baseline}`, position: "insideTopRight", fill: "var(--teal)", fontSize: 8, opacity: 0.6, fontFamily: "var(--font-space-grotesk)" }}
+                      />
+                    )}
+                    <Line dataKey="rhr"     stroke="var(--teal)"  strokeWidth={1}   type="linear" dot={false} isAnimationActive={false} connectNulls={false} name="RHR" />
+                    <Line dataKey="rolling" stroke="var(--amber)" strokeWidth={1.5} strokeDasharray="5 3" type="linear" dot={false} isAnimationActive={false} connectNulls={true} name="7D_AVG" />
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
             ) : (
