@@ -199,6 +199,15 @@ function LegendBtn({
   )
 }
 
+/* ─── Cadence dot ────────────────────────────────────────── */
+
+function CadenceDot(props: { cx?: number; cy?: number; value?: number | null }) {
+  const { cx, cy, value } = props
+  if (cx == null || cy == null || value == null) return <g />
+  const fill = value < 168 ? "#e05252" : value <= 175 ? "#22c55e" : "#c084fc"
+  return <circle cx={cx} cy={cy} r={1.5} fill={fill} />
+}
+
 /* ─── Lap filter button ──────────────────────────────────── */
 
 type LapFilter = "ALL" | "WARM_UP" | "RUN" | "INTERVAL" | "RECOVERY"
@@ -697,7 +706,7 @@ export default function RunAnalysisClient({
                       stroke="#c084fc"
                       strokeWidth={0}
                       type="linear"
-                      dot={{ r: 1.5, fill: "#c084fc", strokeWidth: 0 }}
+                      dot={CadenceDot as any}
                       isAnimationActive={false}
                       connectNulls={false}
                       hide={!showCad}
@@ -778,12 +787,12 @@ export default function RunAnalysisClient({
                   <div
                     className="grid px-4 py-1.5"
                     style={{
-                      gridTemplateColumns: "44px 80px 70px 70px",
+                      gridTemplateColumns: "44px 70px 65px 58px 68px 68px 58px 72px",
                       borderBottom: "1px solid var(--outline-variant)",
                       backgroundColor: "var(--surface-container-low)",
                     }}
                   >
-                    {["LAP", "DIST", "PACE", "AVG_HR"].map((col) => (
+                    {["LAP", "DIST", "PACE", "AVG_HR", "GCT", "STRIDE", "MAX_HR", "VERT_OSC"].map((col) => (
                       <span key={col} className="label-caps text-[var(--on-surface-variant)]">
                         {col}
                       </span>
@@ -794,7 +803,7 @@ export default function RunAnalysisClient({
                       key={lap.lap_number}
                       className="grid px-4 py-2"
                       style={{
-                        gridTemplateColumns: "44px 80px 70px 70px",
+                        gridTemplateColumns: "44px 70px 65px 58px 68px 68px 58px 72px",
                         borderBottom: "1px solid var(--outline-variant)",
                       }}
                     >
@@ -810,6 +819,18 @@ export default function RunAnalysisClient({
                       <span className="code-data text-[var(--on-surface)]">
                         {lap.avg_hr ?? "--"}
                       </span>
+                      <span className="code-data text-[var(--on-surface)]">
+                        {fmtGct(lap.avg_gct)}
+                      </span>
+                      <span className="code-data text-[var(--on-surface)]">
+                        {lap.avg_stride_length != null ? `${lap.avg_stride_length.toFixed(2)}m` : "--"}
+                      </span>
+                      <span className="code-data text-[var(--on-surface)]">
+                        {lap.max_hr ?? "--"}
+                      </span>
+                      <span className="code-data text-[var(--on-surface)]">
+                        {lap.avg_vertical_oscillation != null ? `${lap.avg_vertical_oscillation.toFixed(1)}cm` : "--"}
+                      </span>
                     </div>
                   ))}
                 </>
@@ -819,12 +840,12 @@ export default function RunAnalysisClient({
                   <div
                     className="grid px-4 py-1.5"
                     style={{
-                      gridTemplateColumns: "44px 90px 65px 70px 65px 60px 60px 68px 72px",
+                      gridTemplateColumns: "44px 90px 65px 70px 65px 60px 60px 68px 72px 68px 72px",
                       borderBottom: "1px solid var(--outline-variant)",
                       backgroundColor: "var(--surface-container-low)",
                     }}
                   >
-                    {["LAP", "INTENT", "DIST", "TIME", "PACE", "AVG_HR", "MAX_HR", "GCT", "CADENCE"].map(
+                    {["LAP", "INTENT", "DIST", "TIME", "PACE", "AVG_HR", "MAX_HR", "GCT", "CADENCE", "STRIDE", "VERT_OSC"].map(
                       (col) => (
                         <span key={col} className="label-caps text-[var(--on-surface-variant)]">
                           {col}
@@ -844,7 +865,7 @@ export default function RunAnalysisClient({
                         key={lap.lap_number}
                         className="grid px-4 py-2"
                         style={{
-                          gridTemplateColumns: "44px 90px 65px 70px 65px 60px 60px 68px 72px",
+                          gridTemplateColumns: "44px 90px 65px 70px 65px 60px 60px 68px 72px 68px 72px",
                           borderBottom: "1px solid var(--outline-variant)",
                         }}
                       >
@@ -874,6 +895,12 @@ export default function RunAnalysisClient({
                         </span>
                         <span className="code-data text-[var(--on-surface)]">
                           {lap.avg_cadence ?? "--"}
+                        </span>
+                        <span className="code-data text-[var(--on-surface)]">
+                          {lap.avg_stride_length != null ? `${lap.avg_stride_length.toFixed(2)}m` : "--"}
+                        </span>
+                        <span className="code-data text-[var(--on-surface)]">
+                          {lap.avg_vertical_oscillation != null ? `${lap.avg_vertical_oscillation.toFixed(1)}cm` : "--"}
                         </span>
                       </div>
                     )
