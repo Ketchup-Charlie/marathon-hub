@@ -16,6 +16,7 @@ export type MergedDayRow = {
   targetPaceSec: number | null
   actualPaceStr: string | null
   avgHr: number | null
+  durationSec: number | null
   runTypeTag: string | null
   comply: "green" | "amber" | "red" | "upcoming" | null
   segmentTarget: boolean
@@ -25,6 +26,13 @@ export type MergedDayRow = {
 }
 
 /* ─── Low-level helpers ──────────────────────────────────── */
+
+function parseIntervalToSec(s: string | null | undefined): number | null {
+  if (!s) return null
+  const parts = s.split(":").map(Number)
+  if (parts.length !== 3 || parts.some(isNaN)) return null
+  return parts[0] * 3600 + parts[1] * 60 + parts[2]
+}
 
 function parsePaceStr(pace: string | null | undefined): number | null {
   if (!pace) return null
@@ -188,7 +196,7 @@ export async function getCompletedRuns(userId: string, fromDate: string, toDate:
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("completed_runs")
-    .select("id, date, total_distance, avg_pace, avg_hr, run_type_tag")
+    .select("id, date, total_distance, total_time, avg_pace, avg_hr, run_type_tag")
     .eq("user_id", userId)
     .gte("date", fromDate)
     .lte("date", toDate)
@@ -234,6 +242,7 @@ export async function mergeWeekData(
         targetPaceSec:       null,
         actualPaceStr:       run?.avg_pace ?? null,
         avgHr:               run?.avg_hr ?? null,
+        durationSec:         null,
         runTypeTag:          run?.run_type_tag ?? null,
         comply:              null,
         segmentTarget:       false,
@@ -263,6 +272,7 @@ export async function mergeWeekData(
       targetPaceSec,
       actualPaceStr: run?.avg_pace ?? null,
       avgHr:         run?.avg_hr ?? null,
+      durationSec:   parseIntervalToSec(run?.total_time ?? null),
       runTypeTag:    run?.run_type_tag ?? null,
       comply: computeComply(
         pw.workout_type,

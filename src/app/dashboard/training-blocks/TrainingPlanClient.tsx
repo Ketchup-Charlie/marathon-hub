@@ -42,6 +42,13 @@ function fmtDist(km: number | null): string {
   return `${km.toFixed(1)}k`
 }
 
+function fmtDuration(sec: number | null): string {
+  if (sec == null) return "--"
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  return `${h}:${String(m).padStart(2, "0")}`
+}
+
 function todayStr(): string {
   const d = new Date()
   const y = d.getFullYear()
@@ -431,12 +438,12 @@ export default function TrainingPlanClient({
           <div
             className="grid flex-shrink-0 px-4 py-1.5"
             style={{
-              gridTemplateColumns: "80px 1fr 70px 70px 70px 70px 55px 50px",
+              gridTemplateColumns: "80px 1fr 70px 70px 70px 70px 55px 65px 50px",
               borderBottom: "1px solid var(--outline-variant)",
               backgroundColor: "var(--surface-container-low)",
             }}
           >
-            {["DATE", "WORKOUT_TYPE", "T_DIST", "A_DIST", "T_PACE", "A_PACE", "AVG_HR", "COMPLY"].map(
+            {["DATE", "WORKOUT_TYPE", "T_DIST", "A_DIST", "T_PACE", "A_PACE", "AVG_HR", "DURATION", "COMPLY"].map(
               (col) => (
                 <span key={col} className="label-caps text-[var(--on-surface-variant)]">
                   {col}
@@ -457,7 +464,7 @@ export default function TrainingPlanClient({
                 const isToday = row.date === today
                 const isFuture = row.comply === "upcoming"
                 const rowStyle: React.CSSProperties = {
-                  gridTemplateColumns: "80px 1fr 70px 70px 70px 70px 55px 50px",
+                  gridTemplateColumns: "80px 1fr 70px 70px 70px 70px 55px 65px 50px",
                   borderBottom: "1px solid var(--outline-variant)",
                   paddingLeft: isToday ? "13px" : "16px",
                   paddingRight: "16px",
@@ -475,7 +482,7 @@ export default function TrainingPlanClient({
                       <span className="code-data" style={{ color: "var(--on-surface-variant)", opacity: 0.3 }}>
                         EMPTY
                       </span>
-                      <span /><span /><span /><span /><span /><span />
+                      <span /><span /><span /><span /><span /><span /><span />
                     </div>
                   )
                 }
@@ -501,6 +508,7 @@ export default function TrainingPlanClient({
                       <span className="code-data text-[var(--on-surface)]">
                         {row.avgHr != null ? String(Math.round(row.avgHr)) : "--"}
                       </span>
+                      <span className="code-data text-[var(--on-surface)]">--</span>
                       <span />
                     </div>
                   )
@@ -527,6 +535,7 @@ export default function TrainingPlanClient({
                       <span className="code-data text-[var(--on-surface)]">
                         {row.avgHr != null ? String(Math.round(row.avgHr)) : "--"}
                       </span>
+                      <span className="code-data text-[var(--on-surface)]">--</span>
                       <div className="flex items-center">
                         <ComplySquare comply={row.comply} />
                       </div>
@@ -554,6 +563,9 @@ export default function TrainingPlanClient({
                     </span>
                     <span className="code-data text-[var(--on-surface)]">
                       {!isFuture && row.avgHr != null ? String(Math.round(row.avgHr)) : "--"}
+                    </span>
+                    <span className="code-data text-[var(--on-surface)]">
+                      {!isFuture ? fmtDuration(row.durationSec) : "--"}
                     </span>
                     <div className="flex items-center gap-1.5">
                       <ComplySquare comply={row.comply} />
