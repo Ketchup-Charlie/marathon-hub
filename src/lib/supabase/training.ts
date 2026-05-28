@@ -58,6 +58,19 @@ function hasSegmentTarget(description: string | null | undefined): boolean {
   return description != null && /at MP/i.test(description)
 }
 
+function isBikeSession(description: string | null | undefined, runTypeTag: string | null | undefined): boolean {
+  return (description != null && /bike/i.test(description)) || runTypeTag === "Indoor Cycling"
+}
+
+function parseBikeDurationMins(description: string | null | undefined): { min: number; max: number } | null {
+  if (!description) return null
+  const range = description.match(/(\d+)\s*[-–]\s*(\d+)\s*mins?/i)
+  if (range) return { min: Number(range[1]), max: Number(range[2]) }
+  const single = description.match(/(\d+)\s*mins?/i)
+  if (single) { const m = Number(single[1]); return { min: m, max: m } }
+  return null
+}
+
 /* ─── Per-metric score helpers ───────────────────────────── */
 
 type Score = "green" | "amber" | "red"
@@ -149,8 +162,19 @@ function computeComply(
   avgHr: number | null,
   avgPace: string | null,
   isFuture: boolean,
-): "green" | "amber" | "red" | "upcoming" {
+  durationSec: number | null,
+  description: string | null,
+  runTypeTag: string | null,
+): "green" | "amber" | "red" | "upcoming" | null {
   if (isFuture) return "upcoming"
+
+  if (isBikeSession(description, runTypeTag)) {
+    if (durationSec == null) return "red"
+    const range = parseBikeDurationMins(description)
+    if (range == null) return null
+    const actualMins = durationSec / 60
+    return (actualMins >= range.min * 0.9 && actualMins <= range.max * 1.1) ? "amber" : "red"
+  }
 
   if (workoutType === "Rest") {
     return actualDist == null ? "green" : "red"
@@ -284,6 +308,9 @@ export async function mergeWeekData(
         run?.avg_hr ?? null,
         run?.avg_pace ?? null,
         isFuture,
+        parseIntervalToSec(run?.total_time ?? null),
+        pw.description ?? null,
+        run?.run_type_tag ?? null,
       ),
       segmentTarget:       hasSegmentTarget(pw.description),
       secondaryType:       (pw as { secondary_type?: string | null }).secondary_type ?? null,

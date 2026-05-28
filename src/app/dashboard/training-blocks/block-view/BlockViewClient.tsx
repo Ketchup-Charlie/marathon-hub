@@ -60,7 +60,7 @@ const TYPE_COLOR: Record<string, string> = {
 }
 
 const WORKOUT_TYPES    = ['Easy', 'Long', 'Tempo', 'Interval', 'Race', 'Strength', 'Rest']
-const METRIC_TYPES     = ['Pace', 'HR', 'RPE']
+const METRIC_TYPES     = ['HR', 'Pace', 'DURATION']
 const PHASE_TYPES      = ['BASE', 'BUILD', 'PEAK', 'TAPER', 'RACE']
 const SECONDARY_TYPES  = ['None', 'Strength', 'Mobility', 'Stretch', 'Cross-train', 'Rest']
 
@@ -479,6 +479,8 @@ export default function BlockViewClient({
                                 >
                                   {workout.target_metric_type === 'Pace'
                                     ? `${workout.target_metric_min}–${workout.target_metric_max}`
+                                    : workout.target_metric_type === 'DURATION'
+                                    ? `${workout.target_metric_min}–${workout.target_metric_max}mins`
                                     : `${workout.target_metric_min}–${workout.target_metric_max}bpm`}
                                 </span>
                               )}
@@ -659,30 +661,44 @@ export default function BlockViewClient({
               </label>
 
               {/* min / max */}
-              <div className="flex gap-3">
-                <label className="flex flex-col gap-1 flex-1">
-                  <span className="label-caps text-[var(--on-surface-variant)]">MIN</span>
-                  <input
-                    type="text"
-                    value={form.target_metric_min}
-                    onChange={e => setForm(f => ({ ...f, target_metric_min: e.target.value }))}
-                    placeholder={form.target_metric_type === 'Pace' ? '5:30' : '136'}
-                    className="code-data text-[var(--teal)] bg-transparent px-2 py-1"
-                    style={{ border: '1px solid var(--outline-variant)', outline: 'none', caretColor: 'var(--teal)' }}
-                  />
-                </label>
-                <label className="flex flex-col gap-1 flex-1">
-                  <span className="label-caps text-[var(--on-surface-variant)]">MAX</span>
-                  <input
-                    type="text"
-                    value={form.target_metric_max}
-                    onChange={e => setForm(f => ({ ...f, target_metric_max: e.target.value }))}
-                    placeholder={form.target_metric_type === 'Pace' ? '5:45' : '145'}
-                    className="code-data text-[var(--teal)] bg-transparent px-2 py-1"
-                    style={{ border: '1px solid var(--outline-variant)', outline: 'none', caretColor: 'var(--teal)' }}
-                  />
-                </label>
-              </div>
+              {(() => {
+                const mt = form.target_metric_type
+                const minPh  = mt === 'Pace' ? '5:45' : mt === 'DURATION' ? '45' : '125'
+                const maxPh  = mt === 'Pace' ? '6:15' : mt === 'DURATION' ? '60' : '135'
+                const suffix = mt === 'Pace' ? 'min/km' : mt === 'DURATION' ? 'mins' : 'bpm'
+                return (
+                  <div className="flex gap-3">
+                    <label className="flex flex-col gap-1 flex-1">
+                      <span className="label-caps text-[var(--on-surface-variant)]">MIN</span>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={form.target_metric_min}
+                          onChange={e => setForm(f => ({ ...f, target_metric_min: e.target.value }))}
+                          placeholder={minPh}
+                          className="code-data text-[var(--teal)] bg-transparent px-2 py-1"
+                          style={{ width: 72, border: '1px solid var(--outline-variant)', outline: 'none', caretColor: 'var(--teal)' }}
+                        />
+                        <span className="label-caps text-[var(--on-surface-variant)]" style={{ fontSize: 8, opacity: 0.6, whiteSpace: 'nowrap' }}>{suffix}</span>
+                      </div>
+                    </label>
+                    <label className="flex flex-col gap-1 flex-1">
+                      <span className="label-caps text-[var(--on-surface-variant)]">MAX</span>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={form.target_metric_max}
+                          onChange={e => setForm(f => ({ ...f, target_metric_max: e.target.value }))}
+                          placeholder={maxPh}
+                          className="code-data text-[var(--teal)] bg-transparent px-2 py-1"
+                          style={{ width: 72, border: '1px solid var(--outline-variant)', outline: 'none', caretColor: 'var(--teal)' }}
+                        />
+                        <span className="label-caps text-[var(--on-surface-variant)]" style={{ fontSize: 8, opacity: 0.6, whiteSpace: 'nowrap' }}>{suffix}</span>
+                      </div>
+                    </label>
+                  </div>
+                )
+              })()}
 
               {/* description */}
               <label className="flex flex-col gap-1">
