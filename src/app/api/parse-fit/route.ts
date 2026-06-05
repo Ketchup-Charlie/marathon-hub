@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { execFile } from 'child_process'
-import { renameSync } from 'fs'
+import { existsSync, renameSync } from 'fs'
 import { writeFile, unlink } from 'fs/promises'
 import { join, dirname } from 'path'
 import { tmpdir } from 'os'
@@ -8,8 +8,20 @@ import { randomUUID } from 'crypto'
 import AdmZip from 'adm-zip'
 import { createClient } from '@/lib/supabase/server'
 
-const PYTHON = process.env.PYTHON_PATH ?? 'python3'
+function resolvePython(): string {
+  if (process.env.PYTHON_PATH) return process.env.PYTHON_PATH
+  for (const p of ['/usr/local/bin/python3', '/usr/bin/python3']) {
+    if (existsSync(p)) return p
+  }
+  return 'python3'
+}
+
+const PYTHON = resolvePython()
 const PARSER = join(process.cwd(), 'parser', 'fit_parser.py')
+const EXEC_OPTIONS = {
+  timeout: 30_000,
+  env: { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin' },
+}
 
 function extractFitFromZip(zipPath: string, fitPath: string): void {
   const zip = new AdmZip(zipPath)
@@ -28,7 +40,8 @@ class ParserError extends Error {
 
 function runParser(fitPath: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(PYTHON, [PARSER, fitPath], { timeout: 30_000 }, (err, stdout, stderr) => {
+    console.error('[parse-fit] python:', PYTHON, 'parser:', PARSER, 'PATH:', EXEC_OPTIONS.env.PATH)
+    execFile(PYTHON, ['-u', PARSER, fitPath], EXEC_OPTIONS, (err, stdout, stderr) => {
       if (err) {
         reject(new ParserError(stderr, err.message))
         return
