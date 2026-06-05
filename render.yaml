@@ -2,7 +2,7 @@ services:
   - type: web
     name: marathon-hub
     runtime: node
-    buildCommand: npm install && python3 -m pip install --target /opt/render/project/src/parser/lib -r parser/requirements.txt && npm run build
+    buildCommand: npm install && python3 -m venv /opt/render/project/src/parser/venv && /opt/render/project/src/parser/venv/bin/pip install -r parser/requirements.txt && npm run build
     startCommand: npm start
     envVars:
       - key: NEXT_PUBLIC_SUPABASE_URL
@@ -18,4 +18,4 @@ services:
       - key: NEXT_PUBLIC_APP_URL
         sync: false
       - key: PYTHON_PATH
-        value: python3
+        value: /opt/render/project/src/parser/venv/bin/python3
