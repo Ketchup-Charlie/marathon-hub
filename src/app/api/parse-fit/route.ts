@@ -8,7 +8,7 @@ import { randomUUID } from 'crypto'
 import AdmZip from 'adm-zip'
 import { createClient } from '@/lib/supabase/server'
 
-const PYTHON = process.env.PYTHON_PATH ?? 'python'
+const PYTHON = process.env.PYTHON_PATH ?? 'python3'
 const PARSER = join(process.cwd(), 'parser', 'fit_parser.py')
 
 function extractFitFromZip(zipPath: string, fitPath: string): void {
