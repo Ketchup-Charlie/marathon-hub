@@ -10,7 +10,11 @@ import { createClient } from '@/lib/supabase/server'
 
 function resolvePython(): string {
   if (process.env.PYTHON_PATH) return process.env.PYTHON_PATH
-  for (const p of ['/usr/local/bin/python3', '/usr/bin/python3']) {
+  for (const p of [
+    '/opt/render/project/src/parser/venv/bin/python3',
+    '/usr/local/bin/python3',
+    '/usr/bin/python3',
+  ]) {
     if (existsSync(p)) return p
   }
   return 'python3'
