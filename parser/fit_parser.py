@@ -6,6 +6,8 @@ Usage: python fit_parser.py <path/to/activity.fit> [--debug]
 """
 
 import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
 import json
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
