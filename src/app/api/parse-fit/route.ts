@@ -20,7 +20,7 @@ const PYTHON = resolvePython()
 const PARSER = join(process.cwd(), 'parser', 'fit_parser.py')
 const EXEC_OPTIONS = {
   timeout: 30_000,
-  env: { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin' },
+  env: { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin', PYTHONPATH: '/opt/render/project/src/parser/lib' },
 }
 
 function extractFitFromZip(zipPath: string, fitPath: string): void {
