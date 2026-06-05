@@ -20,11 +20,21 @@ function extractFitFromZip(zipPath: string, fitPath: string): void {
   if (extracted !== fitPath) renameSync(extracted, fitPath)
 }
 
+class ParserError extends Error {
+  constructor(public readonly detail: string) {
+    super('Parser failed')
+  }
+}
+
 function runParser(fitPath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(PYTHON, [PARSER, fitPath], { timeout: 30_000 }, (err, stdout, stderr) => {
       if (err) {
-        reject(new Error(stderr || err.message))
+        reject(new ParserError(stderr || err.message))
+        return
+      }
+      if (!stdout.trim()) {
+        reject(new ParserError(stderr || 'Parser produced no output'))
         return
       }
       resolve(stdout)
@@ -89,6 +99,9 @@ export async function POST(request: NextRequest) {
 
     return Response.json(parsed)
   } catch (err) {
+    if (err instanceof ParserError) {
+      return Response.json({ error: 'Parser failed', detail: err.detail }, { status: 500 })
+    }
     const message = err instanceof Error ? err.message : String(err)
     return Response.json({ error: message }, { status: 500 })
   } finally {
