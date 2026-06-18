@@ -109,7 +109,10 @@ export default function UploadClient({ shoes }: { shoes: Shoe[] }) {
     fetch("/api/workout-types")
       .then((r) => r.json())
       .then((d: { types?: string[] }) => {
-        if (Array.isArray(d.types) && d.types.length > 0) setTypeOptions(d.types)
+        if (Array.isArray(d.types) && d.types.length > 0) {
+          const merged = [...new Set([...FALLBACK_TYPES, ...d.types])].sort()
+          setTypeOptions(merged)
+        }
       })
       .catch(() => {/* keep fallback */})
   }, [])
