@@ -36,7 +36,7 @@ type Stage = "idle" | "parsing" | "parsed" | "uploading" | "success" | "error"
 
 /* ─── Constants ──────────────────────────────────────────── */
 
-const FALLBACK_TYPES = ["Easy", "Long", "Tempo", "Interval", "Race", "Trail Run", "Recovery"]
+const FALLBACK_TYPES = ["Easy", "Easy - Bike", "Easy - TM", "Long", "Tempo", "Interval", "Race", "Trail Run", "Recovery"]
 
 /* ─── Helpers ────────────────────────────────────────────── */
 
