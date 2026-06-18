@@ -50,16 +50,18 @@ type FormState = {
 /* ─── Constants ──────────────────────────────────────────── */
 
 const TYPE_COLOR: Record<string, string> = {
-  Easy:     '#4ade80',
-  Tempo:    'var(--amber)',
-  Interval: '#ffb300',
-  Long:     '#c084fc',
-  Race:     'var(--amber)',
-  Strength: 'var(--on-surface-variant)',
-  Rest:     'var(--surface-container-highest)',
+  Easy:          '#4ade80',
+  'Easy - Bike': '#4ade80',
+  'Easy - TM':   '#4ade80',
+  Tempo:         'var(--amber)',
+  Interval:      '#ffb300',
+  Long:          '#c084fc',
+  Race:          'var(--amber)',
+  Strength:      'var(--on-surface-variant)',
+  Rest:          'var(--surface-container-highest)',
 }
 
-const WORKOUT_TYPES    = ['Easy', 'Long', 'Tempo', 'Interval', 'Race', 'Strength', 'Rest']
+const WORKOUT_TYPES    = ['Easy', 'Easy - Bike', 'Easy - TM', 'Long', 'Tempo', 'Interval', 'Race', 'Strength', 'Rest']
 const METRIC_TYPES     = ['HR', 'Pace', 'DURATION']
 const PHASE_TYPES      = ['BASE', 'BUILD', 'PEAK', 'TAPER', 'RACE']
 const SECONDARY_TYPES  = ['None', 'Strength', 'Mobility', 'Stretch', 'Cross-train', 'Rest']

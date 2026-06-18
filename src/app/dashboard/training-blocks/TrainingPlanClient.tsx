@@ -103,13 +103,15 @@ function HrvBar(props: {
 /* ─── Workout type cell ─────────────────────────────────── */
 
 const WORKOUT_TYPE_COLOR: Record<string, string> = {
-  Easy:     "#4ade80",
-  Tempo:    "var(--amber)",
-  Interval: "#ffb300",
-  Long:     "#c084fc",
-  Race:     "var(--amber)",
-  Strength: "var(--on-surface-variant)",
-  Rest:     "var(--on-surface-variant)",
+  Easy:          "#4ade80",
+  "Easy - Bike": "#4ade80",
+  "Easy - TM":   "#4ade80",
+  Tempo:         "var(--amber)",
+  Interval:      "#ffb300",
+  Long:          "#c084fc",
+  Race:          "var(--amber)",
+  Strength:      "var(--on-surface-variant)",
+  Rest:          "var(--on-surface-variant)",
 }
 
 function WorkoutTypeCell({ type, secondaryType, description, secondaryDescription }: {

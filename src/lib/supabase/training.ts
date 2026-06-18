@@ -168,7 +168,7 @@ function computeComply(
 ): "green" | "amber" | "red" | "upcoming" | null {
   if (isFuture) return "upcoming"
 
-  if (isBikeSession(description, runTypeTag)) {
+  if (workoutType === 'Easy - Bike' || isBikeSession(description, runTypeTag)) {
     if (durationSec == null) return "red"
     const range = parseBikeDurationMins(description)
     if (range == null) return null
