@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { execFile } from 'child_process'
-import { existsSync, renameSync, statSync, openSync, readSync, closeSync } from 'fs'
+import { existsSync, renameSync } from 'fs'
 import { writeFile, unlink } from 'fs/promises'
 import { join, dirname } from 'path'
 import { tmpdir } from 'os'
@@ -31,7 +31,6 @@ const EXEC_OPTIONS = {
 function extractFitFromZip(zipPath: string, fitPath: string): void {
   const zip = new AdmZip(zipPath)
   const entries = zip.getEntries()
-  console.error('[parse-fit] zip entries:', entries.map(e => e.entryName))
   const fitEntry = entries.find(e => e.entryName.toLowerCase().endsWith('.fit'))
   if (!fitEntry) throw new Error('No .fit file found inside zip')
   zip.extractEntryTo(fitEntry, dirname(fitPath), false, true)
@@ -47,7 +46,6 @@ class ParserError extends Error {
 
 function runParser(fitPath: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    console.error('[parse-fit] python:', PYTHON, 'parser:', PARSER, 'PATH:', EXEC_OPTIONS.env.PATH)
     execFile(PYTHON, ['-u', PARSER, fitPath], EXEC_OPTIONS, (err, stdout, stderr) => {
       console.error('[parse-fit] parser exit code:', err?.code ?? 0, 'signal:', err?.signal ?? null, 'stderr:', stderr)
       if (err) {
@@ -97,7 +95,6 @@ export async function POST(request: NextRequest) {
   try {
     const bytes = await file.arrayBuffer()
     const buf = Buffer.from(bytes)
-    console.error('[parse-fit] received bytes:', buf.length, 'first16hex:', buf.subarray(0, 16).toString('hex'))
 
     const isZipContent = buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04
     uploadPath = join(tmpdir(), `${randomUUID()}${isZipContent ? '.zip' : '.fit'}`)
@@ -105,18 +102,7 @@ export async function POST(request: NextRequest) {
 
     if (isZipContent) {
       fitPath = join(tmpdir(), `${randomUUID()}.fit`)
-      try {
-        extractFitFromZip(uploadPath, fitPath)
-      } catch (e) {
-        console.error('[parse-fit] zip extract failed:', e)
-        throw e
-      }
-      const stat = statSync(fitPath)
-      const head = Buffer.alloc(16)
-      const fd = openSync(fitPath, 'r')
-      readSync(fd, head, 0, 16, 0)
-      closeSync(fd)
-      console.error('[parse-fit] extracted file size:', stat.size, 'first16hex:', head.toString('hex'))
+      extractFitFromZip(uploadPath, fitPath)
     } else {
       fitPath = uploadPath
     }
