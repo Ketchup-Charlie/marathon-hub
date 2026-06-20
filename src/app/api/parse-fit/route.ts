@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { execFile } from 'child_process'
-import { existsSync, renameSync } from 'fs'
+import { existsSync, renameSync, statSync, openSync, readSync, closeSync } from 'fs'
 import { writeFile, unlink } from 'fs/promises'
 import { join, dirname } from 'path'
 import { tmpdir } from 'os'
@@ -109,6 +109,12 @@ export async function POST(request: NextRequest) {
         console.error('[parse-fit] zip extract failed:', e)
         throw e
       }
+      const stat = statSync(fitPath)
+      const head = Buffer.alloc(16)
+      const fd = openSync(fitPath, 'r')
+      readSync(fd, head, 0, 16, 0)
+      closeSync(fd)
+      console.error('[parse-fit] extracted file size:', stat.size, 'first16hex:', head.toString('hex'))
     } else {
       fitPath = uploadPath
     }
