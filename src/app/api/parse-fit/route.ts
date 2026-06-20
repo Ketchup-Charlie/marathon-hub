@@ -87,16 +87,19 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'Only .fit and .zip files are accepted' }, { status: 400 })
   }
 
-  const uploadPath = join(tmpdir(), `${randomUUID()}${isZip ? '.zip' : '.fit'}`)
+  let uploadPath: string | null = null
   let fitPath: string | null = null
 
   try {
     const bytes = await file.arrayBuffer()
     const buf = Buffer.from(bytes)
     console.error('[parse-fit] received bytes:', buf.length, 'first16hex:', buf.subarray(0, 16).toString('hex'))
+
+    const isZipContent = buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04
+    uploadPath = join(tmpdir(), `${randomUUID()}${isZipContent ? '.zip' : '.fit'}`)
     await writeFile(uploadPath, buf)
 
-    if (isZip) {
+    if (isZipContent) {
       fitPath = join(tmpdir(), `${randomUUID()}.fit`)
       extractFitFromZip(uploadPath, fitPath)
     } else {
@@ -124,7 +127,7 @@ export async function POST(request: NextRequest) {
     const message = err instanceof Error ? err.message : String(err)
     return Response.json({ error: message }, { status: 500 })
   } finally {
-    unlink(uploadPath).catch(() => {})
+    if (uploadPath) unlink(uploadPath).catch(() => {})
     if (fitPath && fitPath !== uploadPath) unlink(fitPath).catch(() => {})
   }
 }
