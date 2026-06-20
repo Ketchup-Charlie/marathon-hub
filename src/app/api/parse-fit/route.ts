@@ -92,7 +92,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const bytes = await file.arrayBuffer()
-    await writeFile(uploadPath, Buffer.from(bytes))
+    const buf = Buffer.from(bytes)
+    console.error('[parse-fit] received bytes:', buf.length, 'first16hex:', buf.subarray(0, 16).toString('hex'))
+    await writeFile(uploadPath, buf)
 
     if (isZip) {
       fitPath = join(tmpdir(), `${randomUUID()}.fit`)
