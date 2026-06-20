@@ -29,7 +29,9 @@ const EXEC_OPTIONS = {
 
 function extractFitFromZip(zipPath: string, fitPath: string): void {
   const zip = new AdmZip(zipPath)
-  const fitEntry = zip.getEntries().find(e => e.entryName.endsWith('.fit'))
+  const entries = zip.getEntries()
+  console.error('[parse-fit] zip entries:', entries.map(e => e.entryName))
+  const fitEntry = entries.find(e => e.entryName.toLowerCase().endsWith('.fit'))
   if (!fitEntry) throw new Error('No .fit file found inside zip')
   zip.extractEntryTo(fitEntry, dirname(fitPath), false, true)
   const extracted = join(dirname(fitPath), fitEntry.name)
@@ -101,7 +103,12 @@ export async function POST(request: NextRequest) {
 
     if (isZipContent) {
       fitPath = join(tmpdir(), `${randomUUID()}.fit`)
-      extractFitFromZip(uploadPath, fitPath)
+      try {
+        extractFitFromZip(uploadPath, fitPath)
+      } catch (e) {
+        console.error('[parse-fit] zip extract failed:', e)
+        throw e
+      }
     } else {
       fitPath = uploadPath
     }
