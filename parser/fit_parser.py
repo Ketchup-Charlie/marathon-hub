@@ -129,11 +129,8 @@ def _detect_intent(lap: dict) -> str:
 # Session parsing
 # ---------------------------------------------------------------------------
 
-def parse_session(fitfile: FitFile) -> dict:
-    session = {}
-    for msg in fitfile.get_messages("session"):
-        session = _msg_to_dict(msg)
-        break  # only one session per activity file
+def parse_session(session_msgs: list) -> dict:
+    session = session_msgs[0] if session_msgs else {}
 
     distance_m = session.get("total_distance")
     time_s = session.get("total_timer_time") or session.get("total_elapsed_time")
@@ -176,18 +173,12 @@ def parse_session(fitfile: FitFile) -> dict:
 _SEMICIRCLE_TO_DEG = 180.0 / (2 ** 31)
 
 
-def parse_timeseries(fitfile: FitFile, interval: int = 10) -> list:
-    t0 = None
-    for msg in fitfile.get_messages("session"):
-        d = _msg_to_dict(msg)
-        t0 = d.get("start_time")
-        break
-
+def parse_timeseries(record_msgs: list, t0, interval: int = 10) -> list:
     points = []
-    for i, msg in enumerate(fitfile.get_messages("record")):
+    for i, rec in enumerate(record_msgs):
         if i % interval != 0:
             continue
-        rec = _msg_to_dict(msg)
+
         ts = rec.get("timestamp")
         if ts is None:
             continue
@@ -234,11 +225,9 @@ def parse_timeseries(fitfile: FitFile, interval: int = 10) -> list:
 # Lap parsing
 # ---------------------------------------------------------------------------
 
-def parse_laps(fitfile: FitFile) -> list:
+def parse_laps(lap_msgs: list) -> list:
     laps = []
-    for i, msg in enumerate(fitfile.get_messages("lap"), start=1):
-        lap = _msg_to_dict(msg)
-
+    for i, lap in enumerate(lap_msgs, start=1):
         distance_m = lap.get("total_distance")
         time_s = lap.get("total_timer_time") or lap.get("total_elapsed_time")
 
@@ -249,7 +238,6 @@ def parse_laps(fitfile: FitFile) -> list:
         if stride_raw is not None:
             avg_stride_m = round(stride_raw / 1000, 3)
         elif distance_m and lap.get("total_strides"):
-            # Derived fallback: distance / full-cycle strides
             avg_stride_m = round(distance_m / lap["total_strides"], 3)
         else:
             avg_stride_m = None
@@ -295,23 +283,31 @@ def main():
         print(json.dumps({"error": f"Failed to open FIT file: {e}"}))
         sys.exit(1)
 
-    if debug:
-        for label, msg_type, limit in [("SESSION", "session", 1), ("LAP 1", "lap", 1), ("RECORD 1", "record", 1)]:
-            for msg in fitfile.get_messages(msg_type):
-                print(f"\n=== {label} fields ===", file=sys.stderr)
-                for field in msg:
-                    print(f"  {field.name!r:45s} = {field.value!r}", file=sys.stderr)
-                limit -= 1
-                if limit == 0:
-                    break
-        # Re-open so get_messages iterates from the start again
-        fitfile = FitFile(fit_path)
+    # Single pass: bucket all messages by type into plain dicts
+    session_msgs: list = []
+    lap_msgs: list = []
+    record_msgs: list = []
+    for msg in fitfile.get_messages():
+        name = msg.name
+        if name == 'session':
+            session_msgs.append(_msg_to_dict(msg))
+        elif name == 'lap':
+            lap_msgs.append(_msg_to_dict(msg))
+        elif name == 'record':
+            record_msgs.append(_msg_to_dict(msg))
 
-    result = parse_session(fitfile)
-    fitfile = FitFile(fit_path)
-    laps = parse_laps(fitfile)
-    fitfile = FitFile(fit_path)
-    timeseries = parse_timeseries(fitfile)
+    if debug:
+        for label, msgs in [("SESSION", session_msgs[:1]), ("LAP 1", lap_msgs[:1]), ("RECORD 1", record_msgs[:1])]:
+            print(f"\n=== {label} fields ===", file=sys.stderr)
+            for d in msgs:
+                for k, v in d.items():
+                    print(f"  {k!r:45s} = {v!r}", file=sys.stderr)
+
+    t0 = session_msgs[0].get("start_time") if session_msgs else None
+
+    result = parse_session(session_msgs)
+    laps = parse_laps(lap_msgs)
+    timeseries = parse_timeseries(record_msgs, t0)
 
     intents = {lap["lap_intent"] for lap in laps}
     result["single_intent"] = len(laps) <= 1 or len(intents) == 1

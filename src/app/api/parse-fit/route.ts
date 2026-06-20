@@ -23,7 +23,7 @@ function resolvePython(): string {
 const PYTHON = resolvePython()
 const PARSER = join(process.cwd(), 'parser', 'fit_parser.py')
 const EXEC_OPTIONS = {
-  timeout: 30_000,
+  timeout: 120_000,
   maxBuffer: 50 * 1024 * 1024,
   env: { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin' },
 }
