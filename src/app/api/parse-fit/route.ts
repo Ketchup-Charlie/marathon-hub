@@ -24,6 +24,7 @@ const PYTHON = resolvePython()
 const PARSER = join(process.cwd(), 'parser', 'fit_parser.py')
 const EXEC_OPTIONS = {
   timeout: 30_000,
+  maxBuffer: 50 * 1024 * 1024,
   env: { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin' },
 }
 
@@ -48,6 +49,7 @@ function runParser(fitPath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     console.error('[parse-fit] python:', PYTHON, 'parser:', PARSER, 'PATH:', EXEC_OPTIONS.env.PATH)
     execFile(PYTHON, ['-u', PARSER, fitPath], EXEC_OPTIONS, (err, stdout, stderr) => {
+      console.error('[parse-fit] parser exit code:', err?.code ?? 0, 'signal:', err?.signal ?? null, 'stderr:', stderr)
       if (err) {
         reject(new ParserError(stderr, err.message))
         return
