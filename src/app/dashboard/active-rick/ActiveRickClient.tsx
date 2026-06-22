@@ -29,6 +29,7 @@ type AvailableRun = {
   avg_hr: number | null
   avg_cadence: number | null
   avg_gct: number | null
+  notes: string | null
 }
 
 type RunLap = {
@@ -162,6 +163,7 @@ function buildContextString(props: Props, loadedRuns: LoadedRun[]): string {
       const hr = run.avg_hr != null ? `${run.avg_hr}bpm` : "N/A"
       const gct = run.avg_gct != null ? ` GCT:${run.avg_gct}ms` : ""
       lines.push(`  ${run.date} | ${dist} | ${pace}/km | ${hr}${gct}`)
+      if (run.notes) lines.push(`    NOTES: ${run.notes}`)
     })
   }
 
@@ -188,6 +190,7 @@ function buildContextString(props: Props, loadedRuns: LoadedRun[]): string {
       const gct = run.avg_gct != null ? ` | avg GCT ${run.avg_gct}ms` : ""
       const cad = run.avg_cadence != null ? ` | avg cadence ${run.avg_cadence}` : ""
       lines.push(`RUN_${idx + 1}: ${run.date} | ${run.run_type_tag ?? "Run"} | ${dist} | avg pace ${pace}${hr}${gct}${cad}`)
+      if (run.notes) lines.push(`  NOTES: ${run.notes}`)
 
       if (run.laps.length > 0) {
         const lapStr = run.laps.map(l => {
@@ -485,7 +488,7 @@ export default function ActiveRickClient(props: Props) {
       const [runRes, lapsRes, tsRes] = await Promise.all([
         supabase
           .from("completed_runs")
-          .select("id, date, title, run_type_tag, total_distance, avg_pace, avg_hr, avg_cadence, avg_gct")
+          .select("id, date, title, run_type_tag, total_distance, avg_pace, avg_hr, avg_cadence, avg_gct, notes")
           .eq("id", runId)
           .maybeSingle(),
         supabase

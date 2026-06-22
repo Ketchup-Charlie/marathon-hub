@@ -529,6 +529,21 @@ export default function RunAnalysisClient({
       {/* ── Shoe strip ──────────────────────────────────────── */}
       <ShoeStrip runId={run.id} shoes={shoes} initialShoeId={run.shoe_id} />
 
+      {/* ── Session notes ───────────────────────────────────── */}
+      {run.notes && (
+        <div
+          className="flex items-start gap-3 px-6 py-3 flex-shrink-0"
+          style={{
+            borderBottom: "1px solid var(--outline-variant)",
+            backgroundColor: "var(--surface-container-low)",
+          }}
+        >
+          <span className="label-caps text-[var(--on-surface-variant)]" style={{ paddingTop: 1, flexShrink: 0 }}>NOTES</span>
+          <span className="label-caps text-[var(--on-surface-variant)]" style={{ paddingTop: 1 }}>::</span>
+          <span className="code-data text-[var(--on-surface)]" style={{ fontSize: 11, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{run.notes}</span>
+        </div>
+      )}
+
       {/* ── Main two-column layout ───────────────────────────── */}
       <div className="flex flex-1 min-h-0">
 

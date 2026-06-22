@@ -49,6 +49,7 @@ export type ActiveRickRecentRun = {
   avg_gct: number | null
   avg_cadence: number | null
   compliance_score: string | null
+  notes: string | null
 }
 
 export type ActiveRickPlannedWorkout = {
@@ -113,7 +114,7 @@ export default async function ActiveRickPage() {
   const [recentRuns, plannedWorkouts, raceConfigRow] = await Promise.all([
     supabase
       .from('completed_runs')
-      .select('date, title, total_distance, avg_pace, avg_hr, avg_gct, avg_cadence, compliance_score')
+      .select('date, title, total_distance, avg_pace, avg_hr, avg_gct, avg_cadence, compliance_score, notes')
       .eq('user_id', user.id)
       .order('date', { ascending: false })
       .limit(5)
